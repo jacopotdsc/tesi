@@ -1,0 +1,89 @@
+%%\documentclass[binding=0.6cm]{sapthesis}
+\documentclass{sapthesis}
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{subcaption}
+\usepackage{amssymb}
+\usepackage{comment}
+
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\title{Residual Learning for Tita Robot}
+
+\author{Jacopo Tedeschi}
+\authoremail{tedeschi.1882789@studenti.uniroma1.it}
+\IDnumber{1882789}
+\course{Artificial Intelligence and Robotics}
+\courseorganizer{Department of Computer, Control and Management Engineering}
+\AcademicYear{2025/2026}
+
+\advisor{Prof. Giuseppe Oriolo}
+\coadvisor{Prof. Leonardo Lanari, Dott. Nicola Scianca}
+\thesistype{Master Degree}
+
+%\examdate{October 2026}
+\copyyear{2025/2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Wheeled-legged robots combine the mobility advantages of legs with the
+efficiency of wheels, enabling robust locomotion on both flat and unstructured
+terrain. Controlling such systems requires precise tracking of velocity
+commands while maintaining balance and ensuring safe interactions with the
+environment. Model Predictive Control (MPC) provides a principled approach for
+trajectory optimization under constraints but can fail to account for
+unmodeled dynamics. This work investigates the use of Reinforcement Learning
+(RL) to augment a low-level MPC controller, allowing the system to learn
+corrective actions from interaction data while preserving safety and structure.
+The approach is validated in simulation using the MuJoCo physics engine.
+\end{abstract}
+
+\tableofcontents
+
+\chapter{Introduction}
+\input{chapters/Introduction}
+\clearpage
+
+\chapter{Related Works}
+\input{chapters/RelatedWorks}
+\clearpage
+
+\chapter{Legged Robot Model}
+\input{chapters/LeggedRobot}
+\clearpage
+
+\chapter{Model Predictive Controller}
+\input{chapters/MPC}
+\clearpage
+
+\chapter{Reinforcement Learning}
+\input{chapters/RL}
+\clearpage
+
+\chapter{Architecture}
+\input{chapters/Architecture}
+\clearpage
+
+\chapter{Results}
+\input{chapters/Results}
+\clearpage
+
+\chapter{Conclusions}
+\input{chapters/Conclusions}
+\clearpage
+
+\bibliographystyle{plain}
+\bibliography{citations}
+
+\end{document}
