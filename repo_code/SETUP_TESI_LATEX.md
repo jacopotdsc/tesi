@@ -25,24 +25,78 @@ Il file `AGENTS.md` è già presente e non deve essere ricreato dallo script di 
 
 Le repository usate come sorgenti tecniche della tesi devono essere aggiunte come Git submodule, non come normali cartelle. In questo modo la repository della tesi registra esattamente il commit del codice utilizzato senza incorporare un'altra repository Git.
 
-Se `mpx/` è già stato aggiunto e Git mostra `adding embedded git repository`, dalla root di `tesi` eseguire:
+La struttura adottata è:
+
+```text
+tesi/
+├── main.tex
+├── chapters/
+├── figures/
+└── repo_code/
+    ├── mpx/
+    └── mujoco_playground/
+```
+
+### Aggiungere entrambi i riferimenti
+
+Se le due repository locali non sono ancora state aggiunte all'indice Git, dalla root di `tesi` eseguire:
 
 ```bash
-git rm --cached -r mpx
-git submodule add -f https://github.com/jacopotdsc/mpx.git mpx
-git add .gitmodules mpx
-git commit -m "Add MPX as thesis reference submodule"
+MPX_URL="$(git -C repo_code/mpx remote get-url origin)"
+MJP_URL="$(git -C repo_code/mujoco_playground remote get-url origin)"
+
+git submodule add -f "$MPX_URL" repo_code/mpx
+git submodule add -f "$MJP_URL" repo_code/mujoco_playground
+
+git add .gitmodules repo_code/mpx repo_code/mujoco_playground
+git commit -m "Add code repositories as thesis submodules"
 git push
 ```
 
-Per aggiungere un'altra repository come riferimento si usa lo stesso schema:
+### Riparare una configurazione incompleta
+
+Durante la configurazione si è verificata questa situazione:
+
+- `repo_code/mpx` era correttamente registrato in `.gitmodules`;
+- `repo_code/mujoco_playground` risultava nell'indice con modalità `160000`, ma non aveva una sezione in `.gitmodules`;
+- nell'indice era rimasto un vecchio riferimento errato a `mpx` nella root.
+
+La procedura di correzione è:
 
 ```bash
-git submodule add URL_REPOSITORY NOME_CARTELLA
-git add .gitmodules NOME_CARTELLA
-git commit -m "Add code reference submodule"
+MJP_URL="$(git -C repo_code/mujoco_playground remote get-url origin)"
+
+git rm --cached mpx
+git rm --cached repo_code/mujoco_playground
+git submodule add -f "$MJP_URL" repo_code/mujoco_playground
+
+git add .gitmodules repo_code/mpx repo_code/mujoco_playground
+git commit -m "Fix thesis code submodules"
 git push
 ```
+
+Se `git rm --cached mpx` non riesce a rimuovere il vecchio riferimento, usare:
+
+```bash
+git update-index --force-remove mpx
+```
+
+### Verificare i submodule
+
+```bash
+git submodule status
+cat .gitmodules
+git ls-files --stage | grep '160000'
+```
+
+Il risultato corretto deve contenere esclusivamente:
+
+```text
+repo_code/mpx
+repo_code/mujoco_playground
+```
+
+La modalità `160000` nell'indice Git identifica un submodule.
 
 Chi clona la tesi per la prima volta deve usare:
 
@@ -59,9 +113,18 @@ git submodule update --init --recursive
 Per aggiornare successivamente il riferimento di `mpx`:
 
 ```bash
-git -C mpx pull
-git add mpx
+git -C repo_code/mpx pull
+git add repo_code/mpx
 git commit -m "Update MPX reference"
+git push
+```
+
+Per aggiornare `mujoco_playground`:
+
+```bash
+git -C repo_code/mujoco_playground pull
+git add repo_code/mujoco_playground
+git commit -m "Update MuJoCo Playground reference"
 git push
 ```
 
@@ -273,14 +336,16 @@ latexmk -C -outdir=build main.tex
 compile_tesi
 ```
 
-## Script completo di reinstallazione
+## Script per installare soltanto le dipendenze
 
-Aprire un terminale nella root della repository `tesi` e copiare tutto il blocco seguente. Lo script non modifica `main.tex` e non tocca `AGENTS.md`.
+La repository contiene già `main.tex`, `AGENTS.md`, la configurazione di VS Code, l'alias documentato e gli altri file necessari. Dopo `git clone` o `git pull`, lo script deve quindi installare soltanto le dipendenze di sistema e l'estensione LaTeX Workshop. Non crea e non modifica alcun file della repository.
+
+Copiare e incollare l'intero blocco:
 
 ```bash
 set -e
 
-echo "Available disk space:"
+echo "Available disk space before installation:"
 df -h /
 
 sudo apt clean
@@ -298,50 +363,11 @@ sudo apt install --no-install-recommends \
 if command -v code >/dev/null 2>&1; then
   code --install-extension James-Yu.latex-workshop
 else
-  echo "Warning: the 'code' command is unavailable; install LaTeX Workshop manually in VS Code."
+  echo "Warning: the 'code' command is unavailable. Install LaTeX Workshop manually in VS Code."
 fi
 
-mkdir -p build chapters figures tables .vscode
-
-if [ ! -f .vscode/settings.json ]; then
-  cat > .vscode/settings.json <<'VSCODE_SETTINGS'
-{
-  "latex-workshop.latex.autoBuild.run": "onSave",
-  "latex-workshop.view.pdf.viewer": "tab",
-  "latex-workshop.latex.outDir": "%DIR%/build"
-}
-VSCODE_SETTINGS
-fi
-
-touch citations.bib
-
-if [ ! -f .gitignore ]; then
-  cat > .gitignore <<'GITIGNORE'
-build/
-*.aux
-*.bbl
-*.bcf
-*.blg
-*.fdb_latexmk
-*.fls
-*.log
-*.out
-*.run.xml
-*.synctex.gz
-*.toc
-*.lof
-*.lot
-GITIGNORE
-fi
-
-if ! grep -q '^alias compile_tesi=' "$HOME/.bashrc" 2>/dev/null; then
-  printf '%s\n' "alias compile_tesi='latexmk -pdf -outdir=build main.tex'" >> "$HOME/.bashrc"
-fi
-
-alias compile_tesi='latexmk -pdf -outdir=build main.tex'
-
-echo "Checking the LaTeX installation..."
-for package in sapthesis algorithm2e algorithm algpseudocode subcaption listings; do
+echo "Checking required LaTeX files..."
+for package in sapthesis algorithm algpseudocode subcaption listings; do
   package_path="$(kpsewhich "$package.sty" || true)"
   if [ -n "$package_path" ]; then
     echo "FOUND: $package_path"
@@ -350,14 +376,6 @@ for package in sapthesis algorithm2e algorithm algpseudocode subcaption listings
   fi
 done
 
-if [ ! -f main.tex ]; then
-  echo "ERROR: main.tex was not found. Run this script from the thesis repository root."
-  exit 1
-fi
-
-echo "Compiling main.tex..."
-compile_tesi
-
-echo "Setup completed. PDF: $(pwd)/build/main.pdf"
-echo "In new terminals, use: compile_tesi"
+echo "Dependency installation completed."
+echo "Enter the thesis repository and run: compile_tesi"
 ```
