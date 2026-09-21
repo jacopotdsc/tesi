@@ -1,0 +1,21 @@
+\begin{abstract}
+
+Model-based control and Reinforcement Learning address different limitations in
+robotic locomotion. Model Predictive Control (MPC) uses an explicit dynamics
+model to optimize future motion and handle physical constraints, but its
+performance can degrade when the model does not capture the full behavior of the
+system. Reinforcement Learning (RL) can learn behaviors directly through
+interaction, making it suitable for compensating for effects that are difficult
+to model. However, policies trained from scratch often require extensive reward
+design and provide little insight into the resulting control strategy. This
+thesis investigates a hybrid approach in which a learned policy augments a
+nominal MPC controller instead of replacing it. The model-based component
+provides the main control action, while the policy learns corrections aimed at
+improving closed-loop performance. The framework is implemented in JAX using
+MPX to parallelize the MPC computations required during training and is
+evaluated in the MuJoCo physics engine. Its performance is assessed against both
+model-based and learning-based baselines, with particular attention to tracking
+accuracy, robustness, and generalization across different commands and
+operating conditions.
+
+\end{abstract}

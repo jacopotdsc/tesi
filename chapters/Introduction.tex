@@ -1,2 +1,283 @@
-\section{Dummy section}
-This is temporary content.
+\chapter{Introduction}
+Legged robots can traverse environments that remain difficult or inaccessible to
+conventional wheeled platforms. Their ability to establish and break contacts
+with the ground allows them to negotiate obstacles, uneven surfaces, and
+discontinuous terrain. This mobility, however, comes at the cost of a
+substantially more complex control problem. Locomotion requires the coordinated
+motion of several joints while the robot maintains balance, regulates contact
+forces, and tracks the commanded velocity. These objectives must be satisfied
+despite impacts, friction uncertainty, actuator limitations, and changes in the
+contact configuration.\\
+\
+Wheeled-legged robots combine articulated limbs with driven wheels and occupy
+an intermediate position between legged and wheeled systems. On regular
+surfaces, rolling motion provides greater efficiency and speed than repeated
+stepping. When the terrain becomes irregular, the legs can change the height
+and orientation of the body, redistribute the contact forces, and step over
+obstacles that cannot be crossed through rolling alone. This combination
+extends the range of possible motions, but also introduces further control
+challenges. The controller must account for the floating-base dynamics, the
+unilateral nature of contacts, the rolling constraints of the wheels, and the
+interaction between body motion and wheel traction. At higher velocities,
+changes in load distribution and imperfect contact modelling can further
+reduce stability \cite{racing}.\\
+\
+Model Predictive Control (MPC) has become one of the main approaches to locomotion
+control because it expresses the task as an Optimal Control Problem (OCP). At each
+control update, MPC predicts the evolution of the robot over a finite horizon
+and computes a sequence of inputs that minimizes a cost function while
+satisfying a model of the dynamics and a set of constraints. Only the first
+input of the optimized sequence is applied. The optimization is then repeated
+from the updated state. This structure allows the controller to consider future
+motion rather than reacting only to the current tracking error. It also provides
+a direct way to encode objectives such as velocity tracking, body-height regulation, force
+distribution, friction limits, and actuator bounds.\\
+\
+The explicit formulation of the prediction model, objective function, and
+constraints makes MPC relatively transparent. Predicted trajectories and
+contact forces can be inspected, and individual weights can be adjusted
+according to their physical meaning. This is particularly useful in legged
+robotics, where controller failures may arise from several interacting sources.
+The internal solution provides information that can help distinguish an
+infeasible motion request from poor state estimation, incorrect contact
+assumptions, or insufficient control authority.\\
+\
+This structure does not remove the difficulties associated with modelling
+locomotion. A full rigid-body model describes the robot more accurately, but
+its use over a sufficiently long prediction horizon may be too computationally
+expensive for real-time control. Reduced-order models are therefore commonly
+adopted. Examples include centroidal models, Single Rigid Body Dynamics models,
+and simplified inverted-pendulum representations. These formulations retain
+the quantities that dominate the global motion of the robot while omitting part
+of the articulated dynamics. The reduction makes online optimization
+practical, but creates a discrepancy between predicted and actual behaviour.
+Joint dynamics, actuator response, structural compliance, impacts, and complex
+wheel--terrain or foot--terrain interactions may only be represented
+approximately.\\
+\
+When a reduced model is used, a Whole-Body Controller (WBC) can be introduced between
+the MPC and the actuators. Its purpose is to map the motion quantities and
+contact forces planned by MPC to commands that are consistent with the complete
+kinematics and dynamics of the robot. A WBC can be formulated as a Quadratic
+Programming (QP) problem in which generalized accelerations, contact forces, or joint torques
+are selected to track the reduced-order plan. At the same time, the QP can
+account for additional requirements that are absent from the simplified MPC
+model, including the floating-base equations of motion, friction-cone
+conditions, joint limits, contact constraints, swing-foot tracking,
+body-orientation regulation, and posture regularization. The resulting
+hierarchy separates long-horizon motion planning from instantaneous whole-body
+control. It does not eliminate model mismatch, but it allows several physical
+constraints to be enforced without introducing the complete multibody system
+into every node of the MPC horizon.\\
+\
+The performance of the resulting MPC-WBC architecture still depends on the
+validity of its models and contact assumptions. Errors in mass and inertia
+parameters, terrain height, friction, actuation delay, or contact timing can
+produce persistent tracking errors and, in more severe cases, instability.
+Some effects can be addressed by increasing model fidelity or adding
+constraints and cost terms. This solution is not always practical. A more
+detailed formulation increases the computational burden, and some phenomena
+are difficult to describe through a compact differentiable model. The
+controller therefore faces a persistent compromise between physical accuracy
+and the ability to solve the optimization problem at the required frequency.\\
+\
+Most established MPC solvers used in robotics are designed primarily for CPU
+execution. Although these implementations can achieve the update rates required
+to control a single robot, their computational cost becomes a bottleneck when
+the controller must be evaluated across thousands of parallel simulation
+environments. This requirement is particularly relevant when MPC is included
+directly in a Reinforcement Learning training loop. Recent work has therefore
+focused on reformulating optimal-control algorithms to exploit GPU parallelism,
+allowing multiple MPC problems to be solved concurrently alongside the learning
+process. MPX follows this direction by providing a JAX-based, GPU-accelerated
+MPC framework for legged robots \cite{mpx}. Its solver exploits temporal and
+state-space parallelism through associative scan operations, enabling the
+model-based controller to remain active during large-scale policy training
+rather than being used only to generate offline trajectories or reference
+motions. Its solver exploits temporal and
+state-space parallelism through associative scan operations, reducing the
+dependence of computation time on the prediction-horizon length and on the
+dimensions of the state and control spaces. Besides supporting real-time
+control, this formulation makes it possible to evaluate many MPC instances
+concurrently during learning. Model-based control can therefore remain inside
+the simulation loop rather than being used only to generate an offline dataset
+or a reference trajectory.\\
+\
+Reinforcement Learning (RL) offers a different approach to the same control problem.
+Rather than requiring a complete analytical description of the dynamics, an RL
+policy learns a mapping from observations to actions through interaction with
+an environment. The policy is optimized to maximize the expected cumulative
+reward, which can include velocity tracking, stability, energy consumption,
+action smoothness, and other task-related objectives. Training under variations
+in the robot model, terrain, observations, and external disturbances can
+produce behaviours that are less dependent on a single nominal model. RL can
+also account implicitly for nonlinear contact effects and objectives that would
+be cumbersome to include in an online optimization problem.\\
+\
+These advantages are accompanied by important limitations. A learned policy
+does not normally enforce physical constraints in the explicit form used by
+MPC. Its behaviour depends strongly on the training distribution, reward
+definition, action representation, and simulation model. Good performance
+inside the training domain does not guarantee predictable behaviour in states
+that were rarely or never encountered. Reward design can also require
+considerable tuning, since a policy may exploit unintended aspects of the
+simulator or trade one objective against another in an undesirable way.
+Finally, the internal reasoning of a neural policy is difficult to inspect.
+Diagnosing a failure is therefore less direct than examining the state,
+constraints, and cost terms of a model-based optimizer.\\
+\
+MPC and RL have complementary strengths. MPC supplies a physically grounded
+nominal behaviour, explicit predictions, and structured constraint handling.
+RL provides a mechanism for learning corrections from experience when the
+nominal model is incomplete. This complementarity has motivated several
+combined architectures. A policy may adjust parameters of the optimization
+problem, generate reference trajectories or contact schedules, imitate
+trajectories produced by an MPC expert, or act in parallel with the model-based
+controller \cite{adaptive_mpc,non_gaited}. Each choice
+determines how authority is divided between the analytical controller and the
+learned component.\\
+\
+This thesis focuses on residual learning, in which the model-based controller
+remains active and the policy produces a correction to its nominal command. The
+main locomotion task is therefore not learned from an unstructured initial
+policy. MPC and Whole-Body Control provide the nominal motion and the
+corresponding actuator torques, while RL learns only the additional contribution
+required to improve the closed-loop response. The final command can be
+expressed in the general form
+
+$$
+\boldsymbol{\tau}_{\mathrm{cmd}}
+=
+\boldsymbol{\tau}_{\mathrm{nom}}
++
+\boldsymbol{\tau}_{\mathrm{res}},
+$$
+
+where \(\boldsymbol{\tau}_{\mathrm{nom}}\) is generated by the model-based
+control branch and \(\boldsymbol{\tau}_{\mathrm{res}}\) is obtained from the
+policy output through a low-level feedback law. The nominal controller provides
+a strong control prior and keeps the learning process close to a physically
+meaningful locomotion strategy. The policy is then free to compensate for
+systematic tracking errors, simplified dynamics, uncertain contacts, and other
+effects that are not captured adequately by the nominal formulation. Similar
+torque-level residual architectures have shown that an MPC prior can improve
+training efficiency and extend the range of trackable locomotion commands
+\cite{residual_mpc}.\\
+\
+The residual structure also provides a natural experimental baseline. When the
+learned contribution is bypassed, the robot is controlled by the original architecture. 
+When it is enabled, the nominal controller and
+experimental conditions remain unchanged, while the policy adds its correction.
+The effect of learning can therefore be evaluated without comparing two
+entirely different locomotion pipelines. This distinction must be implemented
+carefully: setting the policy action to zero does not necessarily remove every
+torque produced by a residual feedback controller. A genuine baseline requires
+the residual branch to be excluded from the actuator command.\\
+\
+The work presented in this thesis studies this approach on two robotic systems
+in the MuJoCo physics engine \cite{mujoco}. MuJoCo provides
+rigid-body dynamics, contact simulation, and an interface suitable for parallel
+learning and control experiments. Both the nominal controllers and the learned
+policies are evaluated within the same simulated dynamics, allowing their
+behaviour to be compared under consistent initial conditions, velocity
+commands, disturbances, and model variations.\\
+\
+The first platform is TITA, a wheeled-legged robot with two articulated legs
+and two actuated wheels. Its nominal MPC is based on the Double Force
+Constrained Inverted Pendulum model (DFCIP). This reduced-order
+representation describes the quantities that dominate the motion of the robot,
+including its centre-of-mass position and velocity, heading, forward velocity,
+yaw rate, and wheel contact geometry. From the measured robot state and the
+commanded forward and angular velocities, the MPC plans the desired forward,
+vertical, and angular accelerations together with the ground reaction forces at
+the two wheels.\\
+\
+These accelerations and ground reaction forces constitute the reduced-order
+references supplied by the MPC to the Whole-Body Controller. The WBC formulates
+an instantaneous Quadratic Program over the generalized accelerations and wheel
+contact forces. Its objective includes tracking tasks for the centre of mass,
+the left and right wheels, the base orientation, and the joint posture. The
+optimization also accounts for the floating-base equations of motion, friction
+constraints, and predicted joint limits. Once the QP has been solved, inverse
+dynamics maps the optimized generalized accelerations and contact forces to the
+nominal torques of the eight actuators. The WBC therefore connects the
+accelerations and ground reaction forces produced by the DFCIP-MPC to the
+complete multibody dynamics of TITA.\\
+\
+For TITA, the residual policy observes the robot state together with selected
+outputs of the model-based controller. These include the accelerations and
+ground reaction forces planned by MPC and the nominal torques computed by WBC.
+The policy therefore has access not only to the measured motion but also to the
+action intended by the nominal controller. Its outputs modify the desired
+positions of the leg joints and the desired velocities of the wheels.
+Joint-level feedback converts these offsets into residual torques, which are
+added to the nominal WBC torques before the complete command is applied to the
+actuators.\\
+\
+The second platform is Lite3, a quadruped robot controlled through an
+SRBD-based MPC and a Whole-Body Controller. The MPC receives planar velocity
+commands and predicts the motion of the robot base while optimizing the ground
+reaction forces of the four feet over a finite horizon. A predefined gait
+generator determines the stance and swing phases and constructs the
+corresponding foot references. The WBC uses the first optimized set of contact
+forces for stance control and tracks the planned foot trajectories during
+swing, producing the nominal joint torques for all twelve actuators.\\
+\
+The Lite3 residual policy generates bounded offsets from a nominal joint
+posture. A joint-space proportional--derivative controller converts these
+offsets into residual torques, which are added to the output of the MPC--WBC
+branch. The policy thus modifies the resulting whole-body behaviour without
+replacing the planner or directly altering the MPC optimization. The Lite3
+study also permits comparison with an end-to-end RL controller, making it
+possible to examine the trade-off between a purely model-based solution, a
+residual architecture, and a policy that learns locomotion without the same
+online model-based prior.\\
+\
+Both residual policies are trained using Proximal Policy Optimization
+\cite{ppo}, an on-policy policy-gradient algorithm that alternates
+between collecting trajectories and performing multiple optimization epochs on
+a clipped surrogate objective. Training is performed in parallel MuJoCo
+environments, with the model-based controller active inside each environment.
+The reward promotes tracking of the commanded linear and angular velocities
+while penalizing unstable body motion, excessive actuator effort, rapid changes
+in the learned action, and episode termination. During training, the critic may
+use privileged simulation quantities that are not required by the deployed
+actor. Observation noise and disturbances can also be introduced to reduce
+dependence on ideal measurements and to test whether the learned correction
+remains effective away from nominal conditions.\\
+\
+The objective of this thesis is to determine whether residual learning can
+improve the tracking accuracy and robustness of an MPC-based locomotion
+controller without discarding its physical structure. The investigation
+considers individual and combined velocity commands, stability limits, control
+effort, uneven terrain, disturbances, observation noise, and variations in
+model parameters. The comparison is not limited to the final tracking error.
+It also examines whether improvements are obtained through bounded and
+sufficiently smooth corrections, whether the nominal behaviour is preserved
+when no correction is needed, and whether the learned component introduces
+systematic biases or undesirable interactions with the original controller.\\
+\
+The main contribution is the development and evaluation of two residual MPC
+architectures for robots with different morphologies and contact behaviours.
+The first combines a DFCIP-based MPC, a constrained WBC, and joint-level
+residual control on a two-wheeled legged platform. The second applies the same
+general principle to a quadruped using SRBD-MPC, gait scheduling, and
+stance--swing whole-body control. In both cases, MPC remains active during
+policy training and evaluation. This allows the policy to learn within the same
+closed-loop architecture used at evaluation and provides a direct comparison
+against the unmodified model-based controller. The study further analyses the
+practical consequences of residual torque addition, including action
+representation, controller update rates, baseline isolation, and the
+interaction between the learned and nominal commands.\\
+\
+The remainder of the thesis develops this investigation from its theoretical
+foundations to its experimental evaluation. The next chapter reviews
+model-based, learning-based, and hybrid approaches to legged locomotion. The
+robot models and the reduced-order representations used by the controllers are
+then introduced, followed by the formulation of MPC and Whole-Body Control.
+The reinforcement-learning problem, policy observations, actions, and training
+procedure are subsequently described. The complete residual architectures for
+TITA and Lite3 are then presented, including the exchange of information
+between the model-based and learned components. Finally, the controllers are
+evaluated in simulation, the results and limitations are discussed, and the
+main conclusions and possible directions for future work are reported.

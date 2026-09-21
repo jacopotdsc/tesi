@@ -1,0 +1,291 @@
+\chapter{Background and Related Work}
+This chapter reviews the main approaches to the control of legged and
+wheeled-legged robots, with particular attention to the combination of
+model-based control and reinforcement learning. The discussion begins with the
+characteristics of these robotic platforms and the challenges introduced by
+dynamic locomotion, intermittent contacts, and underactuated floating-base
+dynamics.\\
+\
+Model-based methods are then examined through reduced-order models, Model
+Predictive Control, and Whole-Body Control. These techniques provide structured
+and interpretable control solutions, but their performance depends on model
+accuracy and is constrained by the computational cost of online optimization.
+Learning-based locomotion offers a complementary approach, allowing policies to
+adapt to complex dynamics and uncertain interactions through experience.\\
+\
+The chapter subsequently considers hybrid architectures that combine MPC and
+Reinforcement Learning. Particular attention is given to hierarchical,
+residual, and adaptive formulations, which assign different roles to the
+learned component and the nominal controller. Finally, recent developments in
+GPU-accelerated optimal control are discussed, since they make it possible to
+execute many MPC instances in parallel and train reinforcement-learning
+policies with the optimizer directly in the control loop.
+
+\section{Related Works}
+\label{sec:related_works}
+
+Optimization-based control has become a standard approach to dynamic legged
+locomotion. It formulates motion generation as an Optimal Control Problem in
+which the robot dynamics, contact forces, physical constraints, and task
+objectives are considered explicitly. Solving the complete problem online is
+difficult because legged robots have many degrees of freedom and interact with
+the environment through intermittent and unilateral contacts
+\cite{legged_optimization}. Existing controllers therefore differ in the
+dynamic model they employ, the way they represent contacts, and the division of
+tasks between predictive planning and low-level control.\\
+\
+Reduced-order models make online optimization tractable by retaining the
+variables that dominate balance and locomotion while neglecting part of the
+articulated dynamics. The convex MPC developed for the MIT Cheetah 3 represents
+the trunk as a single rigid body and optimizes the ground reaction forces over
+a finite horizon \cite{cheetah_mpc}. Whole-body nonlinear MPC instead includes
+the articulated dynamics and optimizes robot motion and contact interactions
+within a single problem \cite{whole_body_nmpc}. This richer representation
+reduces the separation between planning and control but results in a more
+demanding optimization. Other work has addressed the numerical treatment of
+three-dimensional orientation \cite{representation_free_mpc} and adapted solver
+accuracy to the time constraints of whole-body locomotion control
+\cite{fast_whole_body_mpc}.\\
+\
+Wheeled-legged robots introduce rolling contacts and additional actuated
+degrees of freedom. Early experiments on ANYmal integrated wheel motion and
+non-holonomic rolling constraints into a whole-body planning and control
+framework \cite{keep_rollin}. Online trajectory optimization was later used to
+produce hybrid walking-driving motions on rough terrain
+\cite{rolling_deep}. A subsequent whole-body MPC formulation jointly optimized
+torso motion, wheel motion, and contact forces while adapting the contact
+sequence online \cite{wheeled_whole_body_mpc}. These works showed that the
+wheels cannot be treated as an independent drivetrain. Their motion must be
+coordinated with the leg configuration, body dynamics, and contact forces.\\
+\
+Research on wheeled-legged systems has mainly addressed terrain traversal and
+the transition between rolling and stepping. At higher speeds, vehicle-like
+effects become increasingly relevant. Acceleration and cornering redistribute
+the normal loads among the wheels, reducing the available contact margin and
+increasing the risk of slip or rollover. A recent controller for the Unitree
+Go2-W combined an MPC planner for active roll regulation with a learned
+low-level policy. The legs were used as an active suspension system to lean the
+body into turns and reduce lateral load transfer during physical racing
+experiments \cite{racing}.\\
+\
+Reinforcement Learning provides a different approach to the uncertainties and
+contact interactions involved in locomotion. Policies trained in simulation
+have been transferred to physical quadrupeds for agile movements and locomotion
+over challenging terrain \cite{agile_motor_skills,challenging_terrain}.
+Perceptive policies have also demonstrated locomotion in natural environments
+using proprioceptive and exteroceptive information
+\cite{perceptive_rl}. These methods can learn behaviours that are difficult to
+describe through an analytical model, but their performance depends on the
+training distribution, reward formulation, observation design, and simulation
+accuracy.\\
+\
+The computational structure of RL has encouraged massively parallel
+simulation. Thousands of robots can be simulated simultaneously on a GPU,
+producing large batches of experience for policy optimization. This approach
+has substantially reduced the time required to train locomotion policies and
+supports curriculum learning across many parallel environments
+\cite{parallel_rl}. A purely model-free policy, however, does not explicitly
+encode the physical constraints or the structure available to an
+optimization-based controller. This limitation has motivated methods that
+combine learning and model-based control.\\
+\
+One family of hybrid methods uses model-based optimization to generate
+references or guidance for a learned policy. Deep Tracking Control computes
+reference motions through trajectory optimization and trains an RL policy to
+track them, while retaining the planner during deployment
+\cite{deep_tracking}. A related approach uses a reduced-order model to predict
+desired footholds and lets RL realize those footholds without tracking a
+complete reference trajectory \cite{footstep_rl}. In both cases, the model
+guides the learned behaviour, while the policy remains responsible for
+producing the low-level control action.\\
+\
+Hierarchical methods assign planning and execution to different components.
+The policy may select footholds, contact timings, gait parameters, or
+navigation commands, while MPC computes a dynamically consistent motion. In
+\cite{non_gaited}, a high-level RL policy selects acyclic contact patterns and
+navigation commands for a low-level MPC. This removes the combinatorial search
+over contact sequences from the continuous optimization and allows the same
+architecture to address legged and hybrid wheeled-legged locomotion.\\
+\
+A separate family uses learning to modify the model or parameters employed by
+the optimizer. Learned corrections have been introduced to reduce the
+discrepancy between reduced-order predictions and the full-order dynamics of a
+quadruped \cite{model_gap}. Modular residual methods apply learned corrections
+to individual parts of a model-based controller, including its dynamics model
+and footstep planner \cite{modular_residual}. In the adaptive architecture
+presented in \cite{adaptive_mpc}, RL modifies the predictive dynamics,
+swing-foot parameters, and gait frequency used by MPC. The learned action
+therefore changes the optimization problem rather than directly correcting the
+actuator command.\\
+\
+Residual policy learning adopts a more direct decomposition. A conventional
+controller supplies a nominal action, while RL learns only the correction
+needed to improve the resulting behaviour. This principle was introduced for
+contact-rich manipulation tasks, where a feedback controller captured the
+known structure and a residual policy compensated for effects that were
+difficult to model \cite{residual_robot_control}. In locomotion, a residual can
+be applied to the dynamic model, a planned reference, a joint setpoint, or a
+torque command. These alternatives differ in the authority assigned to the
+policy and in how much of the nominal controller remains responsible for
+physical consistency.\\
+\
+The work most closely related to this thesis is Residual MPC, which executes an
+MPC controller and a residual policy concurrently and combines their outputs at
+the joint-control level \cite{residual_mpc}. The MPC provides a structured
+control prior, while the policy learns corrections for modelling errors and
+behaviours that are difficult to encode in the optimization. The paper compares
+different residual action spaces and blending strategies, showing that the
+interface between the two controllers affects both learning and final
+locomotion behaviour. Unlike approaches based on offline demonstrations, MPC
+remains active during training and deployment.\\
+\
+This integration creates a substantial computational requirement. An MPC
+problem must be solved for every simulated robot at each control update.
+Optimal-control solvers for legged locomotion have traditionally been designed
+for sequential execution on CPUs, whereas modern RL environments simulate
+thousands of agents in parallel on GPUs. The resulting separation between CPU
+optimization and GPU training limits the number of MPC instances that can be
+kept inside the learning loop \cite{residual_mpc,mpx}.\\
+\
+CusADi addressed this problem by translating symbolic expressions into
+GPU-compatible operations and evaluating large batches of approximate
+optimal-control problems in parallel \cite{cusadi}. ReLU-QP followed a
+different direction by reformulating an ADMM-based quadratic-programming solver
+using operations efficiently supported by machine-learning frameworks and GPUs
+\cite{relu_qp}. MPX extends GPU acceleration to a primal-dual iLQR formulation
+implemented in JAX. Associative scans parallelize computations along the
+prediction horizon, while batching supports many independent MPC instances on
+the same device \cite{mpx}. This enables MPC to remain directly inside a
+massively parallel RL training loop.\\
+\
+The literature therefore combines model-based control and learning at several
+different levels. The model may generate demonstrations, supply reference
+motions, determine contact sequences, define the dynamics used for prediction,
+or produce the nominal actuator command. In turn, the learned policy may track
+a model-based plan, select high-level decisions, adapt the optimization model,
+or provide a residual correction. This thesis focuses on the last relation:
+the model-based controller supplies the nominal behaviour, while RL learns a
+correction through interaction with the simulated system. The exact interface
+between the two components depends on the robot platform and is described in
+the architecture chapter.
+
+\section{Legged and Wheeled-Legged Locomotion}
+\label{sec:legged_wheeled_legged_locomotion}
+
+Legged robots move through the environment directly through force contacts
+exchange with the surrounding terrain. Unlike conventional wheeled
+vehicles, they do not require a continuous and approximately flat path. Each
+foot can be placed on a separate support surface, allowing the robot to cross
+steps, gaps, debris, and other irregular terrain. This mobility makes legged
+systems suitable for environments in which fixed infrastructure is unavailable
+or ordinary vehicles cannot operate \cite{legged_optimization}.\\
+\
+This capability introduces a demanding control problem. A legged robot is a
+floating-base mechanical system whose body is not directly actuated. Its motion
+must be generated indirectly through the forces exchanged at the active
+contacts. These contacts change during locomotion and are governed by
+unilateral and friction constraints: a foot can push against the terrain but
+cannot pull on it, while excessive tangential force may cause slipping. The
+controller must coordinate joint motion, contact timing, and ground reaction
+forces while maintaining balance and tracking the desired movement
+\cite{legged_optimization}.\\
+\
+The complexity of locomotion also depends on the selected gait. Periodic gaits,
+such as walking, trotting, and bounding, define recurring sequences of stance
+and swing phases. During stance, the contacting limbs support and accelerate
+the body. During swing, the remaining limbs are repositioned for the next
+contact. Faster motions reduce the time available for feedback and may include
+phases with a small support region or no ground contact. Aperiodic locomotion
+provides more freedom to react to the terrain, but selecting contact timings
+while planning the continuous motion makes the control problem considerably
+harder \cite{legged_optimization,non_gaited}.\\
+\
+Model uncertainty further separates the predicted and actual motion. Impacts,
+actuator limitations, delayed measurements, uncertain friction, and imperfect
+terrain information cannot always be represented accurately. These effects are
+particularly important when a controller relies on a reduced-order model, since
+the neglected articulated dynamics still influence the physical robot. Robust
+locomotion therefore requires continuous feedback and repeated adaptation of
+the planned motion.\\
+\
+Wheeled-legged robots extend this mobility by placing wheels at the ends of
+some or all limbs. On regular terrain, rolling avoids the repeated
+acceleration and deceleration associated with conventional stepping and can
+provide faster and more energy-efficient locomotion
+\cite{wheeled_legged_survey,keep_rollin}. When the terrain becomes
+discontinuous or unsuitable for rolling, the articulated legs can adjust the
+body posture, negotiate obstacles, or initiate a stepping motion
+\cite{rolling_deep}. The same platform can therefore use rolling for efficient
+traversal and leg motion when the geometry of the environment requires it.\\
+\
+The mechanical arrangement of the wheels determines the available mobility.
+Some platforms use steerable wheels, whereas others mount non-steerable wheels
+at the ends of the legs. In the latter case, each contact can move along the
+rolling direction but should not slide laterally. The controller must enforce
+this non-holonomic condition while coordinating wheel velocity, leg
+configuration, body motion, and contact forces
+\cite{keep_rollin,wheeled_whole_body_mpc}. The wheels increase the set of
+feasible motions, but also couple locomotion and posture control more tightly
+than in a purely legged system.\\
+\
+Wheeled-legged locomotion can be divided into rolling, stepping, and hybrid
+motions. During rolling, the wheels remain in contact with the ground and the
+legs regulate the posture of the body. During stepping, one or more wheel
+contacts are lifted and repositioned as ordinary feet. Hybrid locomotion
+combines these modes within the same manoeuvre, allowing the robot to drive
+across traversable regions and step over local obstacles
+\cite{rolling_deep}. The contact sequence may be prescribed in advance or
+adapted online according to the state of the robot and its kinematic limits
+\cite{wheeled_whole_body_mpc}.\\
+\
+The addition of wheels does not remove the difficulties associated with legged
+locomotion. Rolling contacts introduce further constraints, and transitions
+between driving and stepping modify the support configuration. At higher
+speeds, acceleration and cornering also redistribute the normal loads between
+the contacts. This lateral load transfer reduces the available contact margin
+and can increase the risk of wheel slip or rollover. On skid-steered platforms,
+yaw is generated through differential wheel torques, further coupling
+longitudinal motion, lateral dynamics, and body posture \cite{racing}.\\
+\
+Articulated legs can be used to mitigate these effects. By changing the
+relative extension of the legs on either side of the body, a wheeled-legged
+robot can regulate its roll angle and redistribute the contact loads. Physical
+experiments on the Unitree Go2-W demonstrated this principle by using the legs
+as an active suspension system and leaning the body into turns
+\cite{racing}. This extends the role of the legs beyond obstacle traversal:
+their configuration also affects stability and vehicle-like dynamics during
+fast rolling.\\
+\
+Legged and wheeled-legged robots thus share the need to regulate an
+underactuated floating body through constrained ground contacts. Wheels improve
+continuous mobility on suitable terrain, but introduce rolling constraints,
+additional actuation, and high-speed effects that are absent or less prominent
+in conventional stepping. These properties motivate controllers that can plan
+body motion and contact forces online while remaining sufficiently efficient
+for closed-loop operation.
+
+\section{Model-Based Locomotion Control}
+
+\subsection{Reduced-Order Models}
+
+\subsection{Model Predictive Control}
+
+\subsection{Whole-Body Control}
+
+\section{Learning-Based Locomotion Control}
+
+\subsection{End-to-End Reinforcement Learning}
+
+\subsection{Residual Reinforcement Learning}
+
+\section{Hybrid MPC and Reinforcement Learning Architectures}
+
+\subsection{Hierarchical Architectures}
+
+\subsection{Residual Architectures}
+
+\subsection{Adaptive MPC Architectures}
+
+\section{GPU-Accelerated Optimization and Learning}
+
+\section{Positioning of This Thesis}
