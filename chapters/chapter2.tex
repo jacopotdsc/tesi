@@ -266,11 +266,785 @@ for closed-loop operation.
 
 \section{Model-Based Locomotion Control}
 
-\subsection{Reduced-Order Models}
+\subsubsection{Double Forces Constrained Inverted Pendulum MPC}
+\label{subsubsec:dfcip_mpc}
 
-\subsection{Model Predictive Control}
+The predictive controller used for TITA is based on the Double Forces
+Constrained Inverted Pendulum (DFCIP). The model describes the centre of mass
+as a point mass supported by two ground reaction forces, one for each wheel.
+The motion of the wheeled support is represented by a virtual unicycle located
+at the midpoint between the wheel contacts.\\
+\
+The DFCIP state is
+%
+\begin{equation}
+    \mathbf{x}
+    =
+    \begin{bmatrix}
+        \mathbf{p}_{\mathrm{CoM}}^{\top} &
+        \mathbf{v}_{\mathrm{CoM}}^{\top} &
+        \mathbf{c}^{\top} &
+        v_{c,z} &
+        \theta &
+        v &
+        \omega
+    \end{bmatrix}^{\top}
+    \in\mathbb{R}^{13},
+    \label{eq:dfcip_state}
+\end{equation}
+%
+where $\mathbf{p}_{\mathrm{CoM}}$ and $\mathbf{v}_{\mathrm{CoM}}$ are the
+centre-of-mass position and velocity. The vector $\mathbf{c}$ denotes the
+midpoint between the two wheel contacts, while $v_{c,z}$ is its vertical
+velocity. The heading angle, forward speed, and yaw rate of the virtual
+unicycle are denoted by $\theta$, $v$, and $\omega$.\\
+\
+The control input is
+%
+\begin{equation}
+    \mathbf{u}
+    =
+    \begin{bmatrix}
+        a &
+        a_{c,z} &
+        \alpha &
+        \mathbf{F}_{L}^{\top} &
+        \mathbf{F}_{R}^{\top}
+    \end{bmatrix}^{\top}
+    \in\mathbb{R}^{9}.
+    \label{eq:dfcip_input}
+\end{equation}
+%
+These are the forward, angular and vertical acceleration
+of the CoM, and the ground reaction forces applied to the wheel contact points.
+\
+The centre-of-mass dynamics are
+%
+\begin{equation}
+    \dot{\mathbf{p}}_{\mathrm{CoM}}
+    =
+    \mathbf{v}_{\mathrm{CoM}},
+    \qquad
+    \dot{\mathbf{v}}_{\mathrm{CoM}}
+    =
+    \mathbf{g}
+    +
+    \frac{1}{m}
+    \left(
+        \mathbf{F}_{L}
+        +
+        \mathbf{F}_{R}
+    \right).
+    \label{eq:dfcip_com_dynamics}
+\end{equation}
+%
+The midpoint between the wheel contacts follows the unicycle dynamics
+%
+\begin{equation}
+\begin{aligned}
+    \dot{c}_x
+        &=
+        v\cos\theta, &
+    \dot{c}_y
+        &=
+        v\sin\theta, \\
+    \dot{c}_z
+        &=
+        v_{c,z}, &
+    \dot{v}_{c,z}
+        &=
+        0, \\
+    \dot{\theta}
+        &=
+        \omega, &
+    \dot{v}
+        &=
+        a, \qquad
+    \dot{\omega}
+        =
+        \alpha.
+\end{aligned}
+\label{eq:dfcip_unicycle_dynamics}
+\end{equation}
+%
+The equations for $\dot{c}_x$ and $\dot{c}_y$ enforce the nonholonomic
+structure of the wheeled base: the support midpoint moves along the direction
+defined by $\theta$ and has no independent lateral-velocity input. The model is
+discretized using forward Euler integration with a prediction step of
+$0.01\,\mathrm{s}$.\\
+\
+Let $d$ denote the distance between the wheels. Their contact positions are
+reconstructed from the midpoint and heading:
+%
+\begin{equation}
+\begin{aligned}
+    \mathbf{p}_{c,L}
+        &=
+        \mathbf{c}
+        +
+        \mathbf{R}_{z}(\theta)
+        \begin{bmatrix}
+            0 & d/2 & 0
+        \end{bmatrix}^{\top}, \\
+    \mathbf{p}_{c,R}
+        &=
+        \mathbf{c}
+        -
+        \mathbf{R}_{z}(\theta)
+        \begin{bmatrix}
+            0 & d/2 & 0
+        \end{bmatrix}^{\top}.
+\end{aligned}
+\label{eq:dfcip_contact_positions}
+\end{equation}
+%
+Since the DFCIP does not include an explicit rotational state for the complete
+robot, the consistency of the force distribution is expressed through the
+moment-balance residual
+%
+\begin{equation}
+    \mathbf{r}_{M,k}
+    =
+    \left(
+        \mathbf{p}_{c,L,k}
+        -
+        \mathbf{p}_{\mathrm{CoM},k}
+    \right)
+    \times
+    \mathbf{F}_{L,k}
+    +
+    \left(
+        \mathbf{p}_{c,R,k}
+        -
+        \mathbf{p}_{\mathrm{CoM},k}
+    \right)
+    \times
+    \mathbf{F}_{R,k}.
+    \label{eq:dfcip_moment_residual}
+\end{equation}
+%
+Penalizing this residual couples the location of the centre of mass to the
+left--right force distribution. During turning, for example, the optimizer can
+vary the tangential and vertical components of the two forces while limiting
+the unmodelled resultant moment.\\
+\
+The DFCIP objective contains a larger set of possible tracking residuals. The stage cost is
+%
+\begin{equation}
+\begin{aligned}
+    \ell_k = 
+        &w_{p_{xy}}
+        \left(
+            p_{\mathrm{CoM},xy,k}
+            -p_{\mathrm{CoM},xy,k}^{\mathrm{ref}}
+        \right)^2
+        +w_{p_z}
+        \left(
+            p_{\mathrm{CoM},z,k}
+            -p_{\mathrm{CoM},z,k}^{\mathrm{ref}}
+        \right)^2
+        \\
+        &+w_{v_{xy}}
+        \left(
+            v_{\mathrm{CoM},xy,k}
+            -v_{\mathrm{CoM},xy,k}^{\mathrm{ref}}
+        \right)^2
+        +w_{v_z}
+        \left(
+            v_{\mathrm{CoM},z,k}
+            -v_{\mathrm{CoM},z,k}^{\mathrm{ref}}
+        \right)^2
+        \\
+        &+w_c\left(c_k-c_k^{\mathrm{ref}}\right)^2
+        +w_{v_c}
+        \left(v_{c,z,k}-v_{c,z,k}^{\mathrm{ref}}\right)^2
+        +w_{\theta}
+        \left(\theta_k-\theta_k^{\mathrm{ref}}\right)^2
+        \\
+        &+w_v\left(v_k-v_k^{\mathrm{ref}}\right)^2
+        +w_{\omega}\left(\omega_k-\omega_k^{\mathrm{ref}}\right)^2
+        \\
+        &+w_a\left(a_k-a_k^{\mathrm{ref}}\right)^2
+        +w_{a_z}
+        \left(a_{c,z,k}-a_{c,z,k}^{\mathrm{ref}}\right)^2
+        +w_{\alpha}
+        \left(\alpha_k-\alpha_k^{\mathrm{ref}}\right)^2
+        \\
+        &+\sum_{i\in\{L,R\}}
+        \left[
+            w_{F_{xy}}
+            \left(F_{i,xy,k}-F_{i,xy,k}^{\mathrm{ref}}\right)^2
+            +w_{F_z}
+            \left(F_{i,z,k}-F_{i,z,k}^{\mathrm{ref}}\right)^2
+        \right]
+        \\
+        &+w_{\mathrm{eq}}
+        \left[
+            v_{c,z,k}^{2}
+            +r_{M,k}
+            +\sum_{i\in\{L,R\}}
+             \min\left(F_{i,z,k},0\right)^2
+        \right]
+\end{aligned}
+\label{eq:dfcip_stage_cost}
+\end{equation}
+%
+Where momentum is expressed as 
+%
+\begin{equation}
+    r_{F_z,k}
+    =
+    \min\left(F_{L,z,k},0\right)^2
+    +
+    \min\left(F_{R,z,k},0\right)^2.
+    \label{eq:dfcip_unilateral_force}
+\end{equation}
+%
+It is zero when both vertical forces are nonnegative and increases when either
+wheel force would pull on the ground. The residual $v_{c,z,k}^{2}$ keeps the
+virtual wheel midpoint on the flat contact surface. These relations are
+treated as soft constraints through the large coefficient
+$w_{\mathrm{eq}}$.\\
+\
+The reference generator assigns
+%
+\begin{equation}
+\begin{aligned}
+    p_{\mathrm{CoM},z}^{\mathrm{ref}}
+        &= 0.4\,\mathrm{m}, \\
+    v_{\mathrm{CoM},z}^{\mathrm{ref}}
+        &= 0, \\
+    v_{c,z}^{\mathrm{ref}}
+        &= 0, \\
+    \mathbf{F}_{L}^{\mathrm{ref}}
+        &=
+        \begin{bmatrix}
+            0 & 0 & mg/2
+        \end{bmatrix}^{\top}, \\
+    \mathbf{F}_{R}^{\mathrm{ref}}
+        &=
+        \begin{bmatrix}
+            0 & 0 & mg/2
+        \end{bmatrix}^{\top}.
+\end{aligned}
+\label{eq:dfcip_nominal_references}
+\end{equation}
+%
+The desired forward speed and yaw rate are approached through
+acceleration-limited profiles. At each prediction step,
+%
+\begin{equation}
+\begin{aligned}
+    v_{k+1}^{\mathrm{ref}}
+        &=
+        v_k^{\mathrm{ref}}
+        +
+        \operatorname{clip}
+        \left(
+            v^{\mathrm{cmd}}-v_k^{\mathrm{ref}},
+            -a_{\max}\Delta t,
+            a_{\max}\Delta t
+        \right), \\
+    \omega_{k+1}^{\mathrm{ref}}
+        &=
+        \omega_k^{\mathrm{ref}}
+        +
+        \operatorname{clip}
+        \left(
+            \omega^{\mathrm{cmd}}-\omega_k^{\mathrm{ref}},
+            -\alpha_{\max}\Delta t,
+            \alpha_{\max}\Delta t
+        \right).
+\end{aligned}
+\label{eq:dfcip_velocity_ramp}
+\end{equation}
+%
+The planar centre-of-mass velocity reference is aligned with the predicted
+heading:
+%
+\begin{equation}
+    \mathbf{v}_{\mathrm{CoM},xy,k}^{\mathrm{ref}}
+    =
+    v_k^{\mathrm{ref}}
+    \begin{bmatrix}
+        \cos\theta_k^{\mathrm{ref}} \\
+        \sin\theta_k^{\mathrm{ref}}
+    \end{bmatrix}.
+    \label{eq:dfcip_com_velocity_reference}
+\end{equation}
+%
+The objective therefore tracks forward speed in two related forms: through the
+scalar unicycle speed $v$ and through the planar centre-of-mass velocity. The
+first represents the motion of the wheel midpoint along its heading, whereas
+the second regulates the global translational motion of the centre of mass.\\
+\
+At the terminal node, input-dependent terms are removed and an additional
+stability residual is introduced:
+%
+\begin{equation}
+    \mathbf{r}_{\mathrm{stab},N}
+    =
+    \mathbf{p}_{\mathrm{CoM},xy,N}
+    -
+    \mathbf{c}_{xy,N}.
+    \label{eq:dfcip_terminal_stability}
+\end{equation}
+%
+The terminal cost is
+%
+\begin{equation}
+\begin{aligned}
+    \ell_N =
+        &w_{p_{xy}}
+        \left(
+            p_{\mathrm{CoM},xy,N}
+            -p_{\mathrm{CoM},xy,N}^{\mathrm{ref}}
+        \right)^2
+        +w_{p_z}
+        \left(
+            p_{\mathrm{CoM},z,N}
+            -p_{\mathrm{CoM},z,N}^{\mathrm{ref}}
+        \right)^2
+        \\
+        &+w_{v_{xy}}
+        \left(
+            v_{\mathrm{CoM},xy,N}
+            -v_{\mathrm{CoM},xy,N}^{\mathrm{ref}}
+        \right)^2
+        +w_{v_z}
+        \left(
+            v_{\mathrm{CoM},z,N}
+            -v_{\mathrm{CoM},z,N}^{\mathrm{ref}}
+        \right)^2
+        \\
+        &+w_c
+        \left(
+            c_N-c_N^{\mathrm{ref}}
+        \right)^2
+        +w_{v_c}
+        \left(
+            v_{c,z,N}-v_{c,z,N}^{\mathrm{ref}}
+        \right)^2
+        +w_{\theta}
+        \left(
+            \theta_N-\theta_N^{\mathrm{ref}}
+        \right)^2
+        \\
+        &+w_v
+        \left(
+            v_N-v_N^{\mathrm{ref}}
+        \right)^2
+        +w_{\omega}
+        \left(
+            \omega_N-\omega_N^{\mathrm{ref}}
+        \right)^2
+        \\
+        &+w_{\mathrm{eq}}
+        \left[
+            v_{c,z,N}^{2}
+            +\left(
+                p_{\mathrm{CoM},xy,N}-c_{xy,N}
+            \right)^2
+        \right]
+\end{aligned}
+\label{eq:dfcip_terminal_cost}
+\end{equation}
+%
+The terminal condition encourages the centre-of-mass projection to return over
+the midpoint of the two wheels. It acts as a reduced stability objective at the
+end of the finite horizon. Moment balance and unilateral-force penalties are
+stage terms and are not included in the implemented terminal cost.\\
+\
+The tasks solved directly by the TITA DFCIP-MPC are:
+
+\begin{itemize}
+    \item regulating the centre-of-mass $p_{\mathrm{CoM}}$;
+    \item tracking the centre-of-mass velocity $v_{\mathrm{CoM}}$;
+    \item tracking the forward speed of the wheeled support $v$;
+    \item tracking the commanded yaw rate $\omega$;
+    \item regularizing forward, vertical, and yaw accelerations $a$, $a_{c,z}$, $\alpha$;
+    \item distributing the ground reaction forces between the two wheels $\mathbf{F}_L$, $\mathbf{F}_R$;
+    \item regularizing tangential and vertical contact forces around their nominal references $F_{i,xy}$, $F_{i,z}$;
+    \item enforcing moment balance through a soft residual $r_M$;
+    \item maintaining zero vertical velocity of the wheel midpoint $v_{c,z}$;
+    \item penalizing negative wheel normal forces $F_{i,z}<0$;
+\end{itemize}
+\
+Planar centre-of-mass position, the position of the virtual contact midpoint,
+its vertical-velocity reference, and the absolute heading angle appear in the
+general objective implementation but have zero weight in the configuration
+used for this work. They must therefore not be listed as active MPC tasks.\\
+\
+The current controller assumes permanent contact with flat ground. It does not
+switch between stance and flight dynamics, and the contact forces are not set
+to zero during any part of the prediction.\\
+\
+The DFCIP-MPC does not take into account robot dynamics and ground-reaction forces constraints. It only penalizes
+negative vertical forces through
+Equation~\eqref{eq:dfcip_unilateral_force}, these are handled by
+the subsequent Whole-Body Controller \ref{subsubsec:wbc_dfcip}, which maps
+the first MPC solution into torques while enforcing the constraints omitted from the reduced
+model.\\
+\
+For TITA, the prediction horizon contains 50 intervals of
+$0.01\,\mathrm{s}$, corresponding to $0.5\,\mathrm{s}$. The MPC is updated at
+$100\,\mathrm{Hz}$. One solver iteration is performed at each update, following
+a real-time iteration scheme, and the previous solution is shifted by one node
+to initialize the next OCP. The same reduced-order problem is solved
+independently for each simulated environment through the batched GPU
+implementation provided by MPX \cite{mpx}.
+
+\subsubsection{Single Rigid Body Dynamics MPC}
+\label{subsubsec:srbd_mpc}
+
+Single Rigid Body Dynamics (SRBD) provides a reduced representation of a legged
+robot in which the complete multibody system is approximated as a single rigid
+body, not including the limbs in the optimized state. Their
+effect on the trunk is represented through the ground reaction forces applied
+at the contact points. This approximation reduces the dimension and
+nonlinearity of the Optimal Control Problem, making it suitable for
+online locomotion control \cite{mpx}.\\
+\
+Let $\mathbf{p}\in\mathbb{R}^{3}$ denote the position of the centre of mass,
+$\mathbf{q}\in\mathbb{S}^{3}$ the base orientation, and
+$\mathbf{v},\boldsymbol{\omega}\in\mathbb{R}^{3}$ the linear and angular
+velocities. The SRBD state is
+%
+\begin{equation}
+    \mathbf{x}
+    =
+    \begin{bmatrix}
+        \mathbf{p}^{\top} &
+        \mathbf{q}^{\top} &
+        \mathbf{v}^{\top} &
+        \boldsymbol{\omega}^{\top}
+    \end{bmatrix}^{\top}
+    \in\mathbb{R}^{13}.
+    \label{eq:srbd_state}
+\end{equation}
+%
+For a quadruped with four point contacts, the control input contains the ground
+reaction force associated with each foot:
+%
+\begin{equation}
+    \mathbf{u}
+    =
+    \begin{bmatrix}
+        \mathbf{F}_{FL}^{\top} &
+        \mathbf{F}_{FR}^{\top} &
+        \mathbf{F}_{HL}^{\top} &
+        \mathbf{F}_{HR}^{\top}
+    \end{bmatrix}^{\top}
+    \in\mathbb{R}^{12}.
+    \label{eq:srbd_input}
+\end{equation}
+%
+The subscripts $FL$, $FR$, $HL$, and $HR$ identify the front-left,
+front-right, hind-left, and hind-right feet. The control variables are therefore
+contact forces rather than actuator torques.\\
+\
+A predefined contact schedule determines which forces act on the body at each
+prediction node. Let $\gamma_{i,k}\in\{0,1\}$ indicate whether foot $i$ is in
+stance at node $k$. The translational dynamics are
+%
+\begin{equation}
+    m\dot{\mathbf{v}}_k
+    =
+    m\mathbf{g}
+    +
+    \sum_{i=1}^{n_c}
+    \gamma_{i,k}\mathbf{F}_{i,k},
+    \label{eq:srbd_linear_dynamics}
+\end{equation}
+%
+where $m$ is the total mass and $n_c=4$ for Lite3. Forces associated with swing
+feet are removed from the predicted body dynamics by the contact mask
+$\gamma_{i,k}$.\\
+\
+The contact forces also generate moments about the centre of mass. Assuming a
+constant centroidal inertia $\mathbf{I}$ expressed in the body frame, the
+rotational dynamics are
+%
+\begin{equation}
+    \mathbf{I}\dot{\boldsymbol{\omega}}_k
+    +
+    \boldsymbol{\omega}_k
+    \times
+    \mathbf{I}\boldsymbol{\omega}_k
+    =
+    \mathbf{R}(\mathbf{q}_k)^{\top}
+    \sum_{i=1}^{n_c}
+    \gamma_{i,k}
+    \left(
+        \mathbf{p}_{f,i,k}-\mathbf{p}_k
+    \right)
+    \times
+    \mathbf{F}_{i,k},
+    \label{eq:srbd_rotational_dynamics}
+\end{equation}
+%
+where $\mathbf{p}_{f,i,k}$ is the position of the $i$-th foot and
+$\mathbf{R}(\mathbf{q}_k)$ is the rotation from the body frame to the world
+frame. The moment generated by each force depends on its lever arm with respect
+to the centre of mass. The MPC can therefore regulate the orientation and
+angular velocity of the body by redistributing the forces among the active
+contacts. This force-distribution mechanism is also used in MPC formulations
+for high-speed wheeled-legged locomotion \cite{racing}.\\
+\
+The discrete dynamics used in the implementation are obtained through
+semi-implicit Euler integration. Linear and angular velocities are updated
+first:
+%
+\begin{equation}
+\begin{aligned}
+    \mathbf{v}_{k+1}
+        &=
+        \mathbf{v}_k
+        +
+        \Delta t
+        \left(
+            \mathbf{g}
+            +
+            \frac{1}{m}
+            \sum_{i=1}^{n_c}
+            \gamma_{i,k}\mathbf{F}_{i,k}
+        \right), \\
+    \boldsymbol{\omega}_{k+1}
+        &=
+        \boldsymbol{\omega}_k
+        +
+        \Delta t\,
+        \mathbf{I}^{-1}
+        \left[
+            \mathbf{R}(\mathbf{q}_k)^{\top}
+            \sum_{i=1}^{n_c}
+            \gamma_{i,k}
+            \left(
+                \mathbf{p}_{f,i,k}-\mathbf{p}_k
+            \right)
+            \times
+            \mathbf{F}_{i,k}
+            -
+            \boldsymbol{\omega}_k
+            \times
+            \mathbf{I}\boldsymbol{\omega}_k
+        \right].
+\end{aligned}
+\label{eq:srbd_velocity_update}
+\end{equation}
+%
+The position and quaternion are then propagated using the updated velocities:
+%
+\begin{equation}
+\begin{aligned}
+    \mathbf{p}_{k+1}
+        &=
+        \mathbf{p}_k
+        +
+        \Delta t\,\mathbf{v}_{k+1}, \\
+    \mathbf{q}_{k+1}
+        &=
+        \mathbf{q}_k
+        \oplus
+        \left(
+            \Delta t\,\boldsymbol{\omega}_{k+1}
+        \right),
+\end{aligned}
+\label{eq:srbd_pose_update}
+\end{equation}
+%
+where $\oplus$ denotes quaternion integration.\\
+\
+The SRBD stage cost used for Lite3 is
+%
+\begin{equation}
+\begin{aligned}
+    \ell_k ={}&
+    \left\|
+        \mathbf{p}_k-\mathbf{p}^{\mathrm{ref}}_k
+    \right\|_{\mathbf{Q}_p}^{2}
+    +
+    \left\|
+        \mathbf{e}_{R}
+        \left(
+            \mathbf{q}_k,\mathbf{q}^{\mathrm{ref}}_k
+        \right)
+    \right\|_{\mathbf{Q}_R}^{2}
+    \\
+    &+
+    \left\|
+        \mathbf{v}_k-\mathbf{v}^{\mathrm{ref}}_k
+    \right\|_{\mathbf{Q}_v}^{2}
+    +
+    \left\|
+        \boldsymbol{\omega}_k
+        -
+        \boldsymbol{\omega}^{\mathrm{ref}}_k
+    \right\|_{\mathbf{Q}_{\omega}}^{2}
+    \\
+    &+
+    \sum_{i=1}^{n_c}
+    \left\|
+        \mathbf{F}_{i,k}
+    \right\|_{\mathbf{Q}_F}^{2}
+    +
+    \sum_{i=1}^{n_c}
+    \phi_{\mu}
+    \left(
+        \mathbf{F}_{i,k}
+    \right),
+\end{aligned}
+\label{eq:lite3_srbd_stage_cost}
+\end{equation}
+%
+where
+$\|\mathbf{z}\|_{\mathbf{A}}^{2}
+=\mathbf{z}^{\top}\mathbf{A}\mathbf{z}$ and
+$\mathbf{e}_{R}$ is the three-dimensional orientation error computed from the
+current and reference quaternions. The terminal cost contains the four state
+tracking terms but omits force regularization and the friction penalty.\\
+\
+The MPC regulates the vertical position of the body, but does not track an absolute
+planar position. Similarly, it penalizes roll and pitch errors but does not
+track an absolute yaw angle. Planar movement and turning are instead specified
+through linear- and angular-velocity references.\\
+\
+The friction term in Equation~\eqref{eq:lite3_srbd_stage_cost} is based on the
+smoothed residual
+%
+\begin{equation}
+    r_{\mu,i,k}
+    =
+    \mu F_{i,z,k}
+    -
+    \sqrt{
+        F_{i,x,k}^{2}
+        +
+        F_{i,y,k}^{2}
+        +
+        \varepsilon
+    },
+    \label{eq:lite3_friction_residual}
+\end{equation}
+%
+with $\mu=0.7$ and $\varepsilon=10^{-2}$ in the current implementation. A
+relaxed barrier $\phi_{\mu}$ increases the cost when this residual approaches
+or crosses zero. The friction cone is therefore treated as a soft constraint
+inside the OCP.\\
+\
+The tasks solved directly by the Lite3 SRBD-MPC are:
+
+\begin{itemize}
+    \item tracking the commanded forward and lateral base velocities;
+    \item regulating the vertical base velocity around zero;
+    \item maintaining the desired base height;
+    \item stabilizing the roll and pitch orientation of the trunk;
+    \item regulating the roll and pitch angular velocities around zero;
+    \item tracking the commanded yaw rate;
+    \item distributing the ground reaction forces among the scheduled stance
+          contacts;
+    \item generating the resultant force required for linear body motion;
+    \item generating the resultant moment required for rotational body motion;
+    \item regularizing the magnitude of the optimized ground reaction forces;
+    \item discouraging contact forces outside the friction cone.
+\end{itemize}
+
+Absolute planar position and absolute yaw orientation are not active tasks
+because their weights are zero. Joint positions, joint velocities, actuator
+torques, and swing-foot tracking are also absent from the OCP. They cannot be
+optimized directly because they are not included in the SRBD state.\\
+\
+The velocity references and contact parameters are produced before solving the
+OCP. The commanded planar velocity is rotated into the world frame using the
+current heading:
+%
+\begin{equation}
+    \mathbf{v}_{xy}^{\mathrm{ref}}
+    =
+    \mathbf{R}_{z}(\psi)
+    \begin{bmatrix}
+        v_x^{\mathrm{cmd}} \\
+        v_y^{\mathrm{cmd}}
+    \end{bmatrix}.
+    \label{eq:lite3_world_velocity_reference}
+\end{equation}
+%
+This velocity is integrated over the horizon to obtain the planar position
+reference:
+%
+\begin{equation}
+    \mathbf{p}_{xy,k}^{\mathrm{ref}}
+    =
+    \mathbf{p}_{xy,0}
+    +
+    k\Delta t\,
+    \mathbf{v}_{xy}^{\mathrm{ref}}.
+    \label{eq:lite3_position_reference}
+\end{equation}
+%
+Although this reference is generated, it does not contribute directly to the
+current objective because the planar entries of $\mathbf{Q}_p$ are zero. The
+base height reference remains constant, and the reference orientation is
+upright when terrain estimation is disabled. The angular-velocity reference is
+%
+\begin{equation}
+    \boldsymbol{\omega}^{\mathrm{ref}}
+    =
+    \begin{bmatrix}
+        0 &
+        0 &
+        \omega_z^{\mathrm{cmd}}
+    \end{bmatrix}^{\top}.
+    \label{eq:lite3_angular_velocity_reference}
+\end{equation}
+%
+A separate gait generator specifies the contact schedule. Lite3 uses a trot in
+which the front-left and hind-right legs share the same phase, while the
+front-right and hind-left legs form the opposite pair. The foothold selected
+for each swing leg follows a velocity-based rule of the form
+%
+\begin{equation}
+    \mathbf{p}_{f,i,xy}^{\mathrm{target}}
+    =
+    \mathbf{p}_{f,i,xy}^{0}
+    +
+    \frac{D}{2f_{\mathrm{step}}}
+    \mathbf{v}_{xy}^{\mathrm{ref}}
+    +
+    \sqrt{\frac{h}{g}}
+    \left(
+        \mathbf{v}_{xy}
+        -
+        \mathbf{v}_{xy}^{\mathrm{ref}}
+    \right),
+    \label{eq:lite3_foothold_selection}
+\end{equation}
+%
+where $D$ is the duty factor, $f_{\mathrm{step}}$ is the step frequency, and
+$h$ is the desired base height. Smooth polynomial trajectories connect the
+lift-off location to the target foothold and raise the foot by the prescribed
+step height. Early measured contacts are used to stop the swing trajectory.\\
+\
+Foothold selection and swing-trajectory generation must not be described as
+tasks solved by the MPC. The generated contact locations enter the SRBD
+dynamics as moment arms, whereas the swing-foot position and velocity
+references are passed to the low-level controller. For a stance leg, this
+controller maps the first optimized ground reaction force into joint torques
+through the foot Jacobian. For a swing leg, it combines Cartesian feedback with
+a dynamics-based feedforward term to track the generated foot trajectory.
+Thus, contact scheduling determines where forces may act, the MPC computes
+their required values, and the low-level controller realizes the resulting
+stance and swing behavior.\\
+\
+For Lite3, the prediction horizon consists of 25 intervals of
+$0.02\,\mathrm{s}$, corresponding to $0.5\,\mathrm{s}$. The MPC is updated at
+$50\,\mathrm{Hz}$, while the low-level controller runs at $200\,\mathrm{Hz}$.
+The previous state and control trajectories are shifted and reused as the
+initial guess at the next MPC update.
+
 
 \subsection{Whole-Body Control}
+\label{subsubsec:wbc_dfcip}
 
 \section{Learning-Based Locomotion Control}
 
