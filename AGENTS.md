@@ -39,6 +39,7 @@ Sul mio computer le repository sono:
 - Non modificare le repository del codice quando il compito riguarda
   soltanto la scrittura della tesi.
 - Il documento LaTeX deve poter essere compilato localmente da VS Code.
+- Quando compili, tutto deve stare nella cartelal di build
 
 # How to write thesis
 Agisci come un copywriter umano esperto. Scrivi un testo sul seguente argomento applicando un'elevata perplessità (utilizza un vocabolario vario, espressioni idiomatiche e scelte di parole non scontate) e un'elevata burstiness (alterna frasi molto corte e incisive a frasi più lunghe e articolate). Evita transizioni robotiche come 'inoltre', 'in conclusione', 'è importante notare'. Usa un tono naturale, inserisci sfumature personali e scrivi come se stessi parlando a un amico o a un collega
@@ -52,3 +53,6 @@ Agisci come un copywriter umano esperto. Scrivi un testo sul seguente argomento 
 Quando scrivi la tesi, consulta il codice nelle altre repository.
 Non modificare `mpx/` o `repo_lite3` senza una richiesta esplicita.
 Prima di usare risultati o parametri, controlla branch e file correnti.
+
+# Other instruction
+Guarda la cartella file_md, la ci sono altre guide per scrivere e tutto

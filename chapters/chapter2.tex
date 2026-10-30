@@ -14,12 +14,10 @@ Learning-based locomotion offers a complementary approach, allowing policies to
 adapt to complex dynamics and uncertain interactions through experience.\\
 \
 The chapter subsequently considers hybrid architectures that combine MPC and
-Reinforcement Learning. Particular attention is given to hierarchical,
-residual, and adaptive formulations, which assign different roles to the
-learned component and the nominal controller. Finally, recent developments in
+Reinforcement Learning. Recent developments in
 GPU-accelerated optimal control are discussed, since they make it possible to
-execute many MPC instances in parallel and train reinforcement-learning
-policies with the optimizer directly in the control loop.
+execute many MPC instances in parallel and train residual-learning
+policies.
 
 \section{Related Works}
 \label{sec:related_works}
@@ -38,9 +36,11 @@ Reduced-order models make online optimization tractable by retaining the
 variables that dominate balance and locomotion while neglecting part of the
 articulated dynamics. The convex MPC developed for the MIT Cheetah 3 represents
 the trunk as a single rigid body and optimizes the ground reaction forces over
-a finite horizon \cite{cheetah_mpc}. Whole-body nonlinear MPC instead includes
-the articulated dynamics and optimizes robot motion and contact interactions
-within a single problem \cite{whole_body_nmpc}. This richer representation
+a finite horizon \cite{cheetah_mpc}. The whole-body nonlinear MPC of Neunert
+et al. instead includes the complete articulated dynamics and explicit contact
+dynamics, optimizing robot motion,
+contact locations, sequences, and timings within a single problem
+\cite{whole_body_nmpc}. This richer representation
 reduces the separation between planning and control but results in a more
 demanding optimization. Other work has addressed the numerical treatment of
 three-dimensional orientation \cite{representation_free_mpc} and adapted solver
@@ -52,17 +52,21 @@ degrees of freedom. Early experiments on ANYmal integrated wheel motion and
 non-holonomic rolling constraints into a whole-body planning and control
 framework \cite{keep_rollin}. Online trajectory optimization was later used to
 produce hybrid walking-driving motions on rough terrain
-\cite{rolling_deep}. A subsequent whole-body MPC formulation jointly optimized
-torso motion, wheel motion, and contact forces while adapting the contact
-sequence online \cite{wheeled_whole_body_mpc}. These works showed that the
-wheels cannot be treated as an independent drivetrain. Their motion must be
-coordinated with the leg configuration, body dynamics, and contact forces.\\
+\cite{rolling_deep}. A subsequent whole-body MPC formulation jointly optimize
+torso motion, wheel motion, and contact forces using a kinodynamic model that
+combines Single Rigid Body Dynamics with whole-body kinematics. Unlike the
+full-dynamics formulation discussed above, this model does not retain the
+complete articulated dynamics. A separate gait-sequence generator uses
+kinematic leg utilities to adapt contact timings online
+\cite{wheeled_whole_body_mpc}. These approaches coordinate wheel motion with
+leg configuration, body dynamics, and contact forces rather than treating the
+wheels as an independent drivetrain.\\
 \
-Research on wheeled-legged systems has mainly addressed terrain traversal and
-the transition between rolling and stepping. At higher speeds, vehicle-like
-effects become increasingly relevant. Acceleration and cornering redistribute
-the normal loads among the wheels, reducing the available contact margin and
-increasing the risk of slip or rollover. A recent controller for the Unitree
+The wheeled-legged studies discussed above focus on terrain traversal and the
+transition between rolling and stepping. At higher speeds, vehicle-like
+effects become increasingly relevant. In particular, lateral load transfer
+during cornering can unload the inner wheels and bring the robot closer to
+rollover \cite{racing}. A recent controller for the Unitree
 Go2-W combined an MPC planner for active roll regulation with a learned
 low-level policy. The legs were used as an active suspension system to lean the
 body into turns and reduce lateral load transfer during physical racing
@@ -89,54 +93,61 @@ encode the physical constraints or the structure available to an
 optimization-based controller. This limitation has motivated methods that
 combine learning and model-based control.\\
 \
-One family of hybrid methods uses model-based optimization to generate
-references or guidance for a learned policy. Deep Tracking Control computes
-reference motions through trajectory optimization and trains an RL policy to
-track them, while retaining the planner during deployment
-\cite{deep_tracking}. A related approach uses a reduced-order model to predict
-desired footholds and lets RL realize those footholds without tracking a
-complete reference trajectory \cite{footstep_rl}. In both cases, the model
+Some hybrid architectures combine a model-based motion planner with an RL
+policy trained to execute the planned motion. In \cite{deep_tracking},
+trajectory optimization generates footholds and base motion and, during training,
+rewards encourage base-motion tracking and accurate foot placement, while the
+actor observes selected planning outputs rather than the full optimized base
+trajectory. The planner remains active during deployment.
+Lee et al. instead use Linear Inverted Pendulum dynamics
+to generate desired foot placements from velocity commands. Their RL policy
+tracks those placements without being required to follow the complete motion
+predicted by the reduced model \cite{footstep_rl}. In both cases, the model
 guides the learned behaviour, while the policy remains responsible for
 producing the low-level control action.\\
 \
-Hierarchical methods assign planning and execution to different components.
-The policy may select footholds, contact timings, gait parameters, or
-navigation commands, while MPC computes a dynamically consistent motion. In
+Hierarchical methods  can also assign high-level decisions to RL and motion generation
+to MPC, reversing the roles of the model-based and learned components in the
+preceding examples. In
 \cite{non_gaited}, a high-level RL policy selects acyclic contact patterns and
 navigation commands for a low-level MPC. This removes the combinatorial search
 over contact sequences from the continuous optimization and allows the same
 architecture to address legged and hybrid wheeled-legged locomotion.\\
 \
-A separate family uses learning to modify the model or parameters employed by
-the optimizer. Learned corrections have been introduced to reduce the
+Other approaches use learning to adapt the prediction model or individual
+components of the nominal control architecture. Learned corrections have been introduced
+to reduce the
 discrepancy between reduced-order predictions and the full-order dynamics of a
 quadruped \cite{model_gap}. Modular residual methods apply learned corrections
 to individual parts of a model-based controller, including its dynamics model
 and footstep planner \cite{modular_residual}. In the adaptive architecture
-presented in \cite{adaptive_mpc}, RL modifies the predictive dynamics,
-swing-foot parameters, and gait frequency used by MPC. The learned action
-therefore changes the optimization problem rather than directly correcting the
-actuator command.\\
+presented in \cite{adaptive_mpc}, RL modifies the predictive dynamics, the
+swing-leg controller, and the gait frequency. These adaptations affect both
+the MPC problem and the generation of swing-leg commands, rather than adding
+a residual torque to the nominal actuator command.\\
 \
-Residual policy learning adopts a more direct decomposition. A conventional
+Residual corrections can therefore act inside the model-based architecture,
+as in the model and planner adaptations discussed above. Action-level residual
+policy learning instead applies the correction to the nominal control output. A
+conventional
 controller supplies a nominal action, while RL learns only the correction
-needed to improve the resulting behaviour. This principle was introduced for
-contact-rich manipulation tasks, where a feedback controller captured the
+needed to improve the resulting behaviour. This approach has been demonstrated
+in contact-rich manipulation tasks, where a feedback controller captured the
 known structure and a residual policy compensated for effects that were
-difficult to model \cite{residual_robot_control}. In locomotion, a residual can
-be applied to the dynamic model, a planned reference, a joint setpoint, or a
-torque command. These alternatives differ in the authority assigned to the
-policy and in how much of the nominal controller remains responsible for
-physical consistency.\\
+difficult to model \cite{residual_robot_control}. For locomotion, corrections
+to joint setpoints and corrections expressed directly as torques provide
+different ways of modifying the nominal actuator command
+\cite{residual_mpc}.\\
 \
 The work most closely related to this thesis is Residual MPC, which executes an
 MPC controller and a residual policy concurrently and combines their outputs at
-the joint-control level \cite{residual_mpc}. The MPC provides a structured
+the torque-control level \cite{residual_mpc}. The MPC provides a structured
 control prior, while the policy learns corrections for modelling errors and
 behaviours that are difficult to encode in the optimization. The paper compares
-different residual action spaces and blending strategies, showing that the
-interface between the two controllers affects both learning and final
-locomotion behaviour. Unlike approaches based on offline demonstrations, MPC
+different residual action spaces and torque-blending strategies, showing that
+the action representation and the way the outputs are combined affect both
+learning and final locomotion behaviour \cite{residual_mpc}. Unlike approaches based on
+offline demonstrations, MPC
 remains active during training and deployment.\\
 \
 This integration creates a substantial computational requirement. An MPC
@@ -149,25 +160,28 @@ kept inside the learning loop \cite{residual_mpc,mpx}.\\
 \
 CusADi addressed this problem by translating symbolic expressions into
 GPU-compatible operations and evaluating large batches of approximate
-optimal-control problems in parallel \cite{cusadi}. ReLU-QP followed a
-different direction by reformulating an ADMM-based quadratic-programming solver
-using operations efficiently supported by machine-learning frameworks and GPUs
-\cite{relu_qp}. MPX extends GPU acceleration to a primal-dual iLQR formulation
-implemented in JAX. Associative scans parallelize computations along the
-prediction horizon, while batching supports many independent MPC instances on
+optimal-control problems in parallel \cite{cusadi}. ReLU-QP addresses the
+solution of quadratic programs by expressing ADMM iterations as a weight-tied
+network with ReLU activations, allowing execution through standard
+machine-learning tools on GPUs \cite{relu_qp}. MPX uses a primal-dual iLQR formulation
+implemented in JAX. Associative scans enable temporal and state-space
+parallelization, while batching supports many independent MPC instances on
 the same device \cite{mpx}. This enables MPC to remain directly inside a
 massively parallel RL training loop.\\
 \
-The literature therefore combines model-based control and learning at several
-different levels. The model may generate demonstrations, supply reference
-motions, determine contact sequences, define the dynamics used for prediction,
-or produce the nominal actuator command. In turn, the learned policy may track
-a model-based plan, select high-level decisions, adapt the optimization model,
-or provide a residual correction. This thesis focuses on the last relation:
-the model-based controller supplies the nominal behaviour, while RL learns a
-correction through interaction with the simulated system. The exact interface
-between the two components depends on the robot platform and is described in
-the architecture chapter.
+These studies motivate the combination of a model-based locomotion controller
+with learned corrections, but their models and control hierarchies cannot be
+transferred unchanged to TITA. The robot shares the rolling-contact constraints
+of wheeled quadrupeds, while its two-wheel support makes body balance and the
+coordination of wheel traction with leg motion central to the control problem.
+This thesis adopts the action-level residual approach: a DFCIP-based MPC and a
+constrained Whole-Body Controller generate the nominal command, while the
+policy modifies torque-level references to produce an additional torque
+contribution. The MPC and WBC remain active during training. Compared with the
+kinodynamic whole-body MPC used in Residual MPC \cite{residual_mpc}, the TITA
+architecture separates reduced-order prediction from whole-body torque
+computation. The architecture chapter describes this decomposition and how
+the learned correction is combined with the nominal command.
 
 \section{Legged and Wheeled-Legged Locomotion}
 \label{sec:legged_wheeled_legged_locomotion}
@@ -299,7 +313,9 @@ midpoint between the two wheel contacts, while $v_{c,z}$ is its vertical
 velocity. The heading angle, forward speed, and yaw rate of the virtual
 unicycle are denoted by $\theta$, $v$, and $\omega$.\\
 \
-The control input is
+At each update, MPC optimizes a sequence of control inputs
+$U = (\mathbf{u}_0, \ldots, \mathbf{u}_{N-1})$ over the prediction
+horizon with the form
 %
 \begin{equation}
     \mathbf{u}
@@ -315,7 +331,8 @@ The control input is
     \label{eq:dfcip_input}
 \end{equation}
 %
-These are the forward, angular and vertical acceleration
+The first element, $\mathbf{u}_0$ of the optimized control sequence, is used to construct the WBC
+references. The control components are the forward, angular and vertical acceleration
 of the CoM, and the ground reaction forces applied to the wheel contact points.
 \
 The centre-of-mass dynamics are
@@ -370,8 +387,8 @@ The midpoint between the wheel contacts follows the unicycle dynamics
 The equations for $\dot{c}_x$ and $\dot{c}_y$ enforce the nonholonomic
 structure of the wheeled base: the support midpoint moves along the direction
 defined by $\theta$ and has no independent lateral-velocity input. The model is
-discretized using forward Euler integration with a prediction step of
-$0.01\,\mathrm{s}$.\\
+discretized using forward Euler integration with prediction time step
+$dt_{\mathrm{mpc}}$.\\
 \
 Let $d$ denote the distance between the wheels. Their contact positions are
 reconstructed from the midpoint and heading:
@@ -399,8 +416,7 @@ reconstructed from the midpoint and heading:
 \end{equation}
 %
 Since the DFCIP does not include an explicit rotational state for the complete
-robot, the consistency of the force distribution is expressed through the
-moment-balance residual
+robot, a moment constraint is introduced to ensure the balance
 %
 \begin{equation}
     \mathbf{r}_{M,k}
@@ -511,7 +527,7 @@ The reference generator assigns
 \begin{equation}
 \begin{aligned}
     p_{\mathrm{CoM},z}^{\mathrm{ref}}
-        &= 0.4\,\mathrm{m}, \\
+        &= z_{\mathrm{target}}, \\
     v_{\mathrm{CoM},z}^{\mathrm{ref}}
         &= 0, \\
     v_{c,z}^{\mathrm{ref}}
@@ -679,372 +695,148 @@ The current controller assumes permanent contact with flat ground. It does not
 switch between stance and flight dynamics, and the contact forces are not set
 to zero during any part of the prediction.\\
 \
-The DFCIP-MPC does not take into account robot dynamics and ground-reaction forces constraints. It only penalizes
-negative vertical forces through
-Equation~\eqref{eq:dfcip_unilateral_force}, these are handled by
-the subsequent Whole-Body Controller \ref{subsubsec:wbc_dfcip}, which maps
-the first MPC solution into torques while enforcing the constraints omitted from the reduced
-model.\\
+The DFCIP-MPC plans the motion of a reduced model; it does not enforce the
+articulated robot's equations of motion or joint-level limits. Its contact
+forces are therefore a prediction, not yet a dynamically feasible motor
+command. The Whole-Body Controller (WBC) receives the first MPC control and
+the measured robot state, then computes joint torques while enforcing
+whole-body dynamics, rolling, friction, and joint-limit constraints
+(Section~\ref{subsubsec:wbc_dfcip}).\\
 \
-For TITA, the prediction horizon contains 50 intervals of
-$0.01\,\mathrm{s}$, corresponding to $0.5\,\mathrm{s}$. The MPC is updated at
-$100\,\mathrm{Hz}$. One solver iteration is performed at each update, following
-a real-time iteration scheme, and the previous solution is shifted by one node
-to initialize the next OCP. The same reduced-order problem is solved
+For TITA, the prediction horizon contains $N$ intervals of duration
+$dt_{\mathrm{mpc}}$, giving a total horizon $T = N\,dt_{\mathrm{mpc}}$.
+The MPC is updated at frequency $f_{\mathrm{mpc}}$, with
+$n_{\mathrm{iter}}$ solver iterations per update. The previous solution is
+shifted to initialize the next OCP. The same reduced-order problem is solved
 independently for each simulated environment through the batched GPU
 implementation provided by MPX \cite{mpx}.
 
-\subsubsection{Single Rigid Body Dynamics MPC}
-\label{subsubsec:srbd_mpc}
-
-Single Rigid Body Dynamics (SRBD) provides a reduced representation of a legged
-robot in which the complete multibody system is approximated as a single rigid
-body, not including the limbs in the optimized state. Their
-effect on the trunk is represented through the ground reaction forces applied
-at the contact points. This approximation reduces the dimension and
-nonlinearity of the Optimal Control Problem, making it suitable for
-online locomotion control \cite{mpx}.\\
-\
-Let $\mathbf{p}\in\mathbb{R}^{3}$ denote the position of the centre of mass,
-$\mathbf{q}\in\mathbb{S}^{3}$ the base orientation, and
-$\mathbf{v},\boldsymbol{\omega}\in\mathbb{R}^{3}$ the linear and angular
-velocities. The SRBD state is
-%
-\begin{equation}
-    \mathbf{x}
-    =
-    \begin{bmatrix}
-        \mathbf{p}^{\top} &
-        \mathbf{q}^{\top} &
-        \mathbf{v}^{\top} &
-        \boldsymbol{\omega}^{\top}
-    \end{bmatrix}^{\top}
-    \in\mathbb{R}^{13}.
-    \label{eq:srbd_state}
-\end{equation}
-%
-For a quadruped with four point contacts, the control input contains the ground
-reaction force associated with each foot:
-%
-\begin{equation}
-    \mathbf{u}
-    =
-    \begin{bmatrix}
-        \mathbf{F}_{FL}^{\top} &
-        \mathbf{F}_{FR}^{\top} &
-        \mathbf{F}_{HL}^{\top} &
-        \mathbf{F}_{HR}^{\top}
-    \end{bmatrix}^{\top}
-    \in\mathbb{R}^{12}.
-    \label{eq:srbd_input}
-\end{equation}
-%
-The subscripts $FL$, $FR$, $HL$, and $HR$ identify the front-left,
-front-right, hind-left, and hind-right feet. The control variables are therefore
-contact forces rather than actuator torques.\\
-\
-A predefined contact schedule determines which forces act on the body at each
-prediction node. Let $\gamma_{i,k}\in\{0,1\}$ indicate whether foot $i$ is in
-stance at node $k$. The translational dynamics are
-%
-\begin{equation}
-    m\dot{\mathbf{v}}_k
-    =
-    m\mathbf{g}
-    +
-    \sum_{i=1}^{n_c}
-    \gamma_{i,k}\mathbf{F}_{i,k},
-    \label{eq:srbd_linear_dynamics}
-\end{equation}
-%
-where $m$ is the total mass and $n_c=4$ for Lite3. Forces associated with swing
-feet are removed from the predicted body dynamics by the contact mask
-$\gamma_{i,k}$.\\
-\
-The contact forces also generate moments about the centre of mass. Assuming a
-constant centroidal inertia $\mathbf{I}$ expressed in the body frame, the
-rotational dynamics are
-%
-\begin{equation}
-    \mathbf{I}\dot{\boldsymbol{\omega}}_k
-    +
-    \boldsymbol{\omega}_k
-    \times
-    \mathbf{I}\boldsymbol{\omega}_k
-    =
-    \mathbf{R}(\mathbf{q}_k)^{\top}
-    \sum_{i=1}^{n_c}
-    \gamma_{i,k}
-    \left(
-        \mathbf{p}_{f,i,k}-\mathbf{p}_k
-    \right)
-    \times
-    \mathbf{F}_{i,k},
-    \label{eq:srbd_rotational_dynamics}
-\end{equation}
-%
-where $\mathbf{p}_{f,i,k}$ is the position of the $i$-th foot and
-$\mathbf{R}(\mathbf{q}_k)$ is the rotation from the body frame to the world
-frame. The moment generated by each force depends on its lever arm with respect
-to the centre of mass. The MPC can therefore regulate the orientation and
-angular velocity of the body by redistributing the forces among the active
-contacts. This force-distribution mechanism is also used in MPC formulations
-for high-speed wheeled-legged locomotion \cite{racing}.\\
-\
-The discrete dynamics used in the implementation are obtained through
-semi-implicit Euler integration. Linear and angular velocities are updated
-first:
-%
-\begin{equation}
-\begin{aligned}
-    \mathbf{v}_{k+1}
-        &=
-        \mathbf{v}_k
-        +
-        \Delta t
-        \left(
-            \mathbf{g}
-            +
-            \frac{1}{m}
-            \sum_{i=1}^{n_c}
-            \gamma_{i,k}\mathbf{F}_{i,k}
-        \right), \\
-    \boldsymbol{\omega}_{k+1}
-        &=
-        \boldsymbol{\omega}_k
-        +
-        \Delta t\,
-        \mathbf{I}^{-1}
-        \left[
-            \mathbf{R}(\mathbf{q}_k)^{\top}
-            \sum_{i=1}^{n_c}
-            \gamma_{i,k}
-            \left(
-                \mathbf{p}_{f,i,k}-\mathbf{p}_k
-            \right)
-            \times
-            \mathbf{F}_{i,k}
-            -
-            \boldsymbol{\omega}_k
-            \times
-            \mathbf{I}\boldsymbol{\omega}_k
-        \right].
-\end{aligned}
-\label{eq:srbd_velocity_update}
-\end{equation}
-%
-The position and quaternion are then propagated using the updated velocities:
-%
-\begin{equation}
-\begin{aligned}
-    \mathbf{p}_{k+1}
-        &=
-        \mathbf{p}_k
-        +
-        \Delta t\,\mathbf{v}_{k+1}, \\
-    \mathbf{q}_{k+1}
-        &=
-        \mathbf{q}_k
-        \oplus
-        \left(
-            \Delta t\,\boldsymbol{\omega}_{k+1}
-        \right),
-\end{aligned}
-\label{eq:srbd_pose_update}
-\end{equation}
-%
-where $\oplus$ denotes quaternion integration.\\
-\
-The SRBD stage cost used for Lite3 is
-%
-\begin{equation}
-\begin{aligned}
-    \ell_k ={}&
-    \left\|
-        \mathbf{p}_k-\mathbf{p}^{\mathrm{ref}}_k
-    \right\|_{\mathbf{Q}_p}^{2}
-    +
-    \left\|
-        \mathbf{e}_{R}
-        \left(
-            \mathbf{q}_k,\mathbf{q}^{\mathrm{ref}}_k
-        \right)
-    \right\|_{\mathbf{Q}_R}^{2}
-    \\
-    &+
-    \left\|
-        \mathbf{v}_k-\mathbf{v}^{\mathrm{ref}}_k
-    \right\|_{\mathbf{Q}_v}^{2}
-    +
-    \left\|
-        \boldsymbol{\omega}_k
-        -
-        \boldsymbol{\omega}^{\mathrm{ref}}_k
-    \right\|_{\mathbf{Q}_{\omega}}^{2}
-    \\
-    &+
-    \sum_{i=1}^{n_c}
-    \left\|
-        \mathbf{F}_{i,k}
-    \right\|_{\mathbf{Q}_F}^{2}
-    +
-    \sum_{i=1}^{n_c}
-    \phi_{\mu}
-    \left(
-        \mathbf{F}_{i,k}
-    \right),
-\end{aligned}
-\label{eq:lite3_srbd_stage_cost}
-\end{equation}
-%
-where
-$\|\mathbf{z}\|_{\mathbf{A}}^{2}
-=\mathbf{z}^{\top}\mathbf{A}\mathbf{z}$ and
-$\mathbf{e}_{R}$ is the three-dimensional orientation error computed from the
-current and reference quaternions. The terminal cost contains the four state
-tracking terms but omits force regularization and the friction penalty.\\
-\
-The MPC regulates the vertical position of the body, but does not track an absolute
-planar position. Similarly, it penalizes roll and pitch errors but does not
-track an absolute yaw angle. Planar movement and turning are instead specified
-through linear- and angular-velocity references.\\
-\
-The friction term in Equation~\eqref{eq:lite3_srbd_stage_cost} is based on the
-smoothed residual
-%
-\begin{equation}
-    r_{\mu,i,k}
-    =
-    \mu F_{i,z,k}
-    -
-    \sqrt{
-        F_{i,x,k}^{2}
-        +
-        F_{i,y,k}^{2}
-        +
-        \varepsilon
-    },
-    \label{eq:lite3_friction_residual}
-\end{equation}
-%
-with $\mu=0.7$ and $\varepsilon=10^{-2}$ in the current implementation. A
-relaxed barrier $\phi_{\mu}$ increases the cost when this residual approaches
-or crosses zero. The friction cone is therefore treated as a soft constraint
-inside the OCP.\\
-\
-The tasks solved directly by the Lite3 SRBD-MPC are:
-
-\begin{itemize}
-    \item tracking the commanded forward and lateral base velocities;
-    \item regulating the vertical base velocity around zero;
-    \item maintaining the desired base height;
-    \item stabilizing the roll and pitch orientation of the trunk;
-    \item regulating the roll and pitch angular velocities around zero;
-    \item tracking the commanded yaw rate;
-    \item distributing the ground reaction forces among the scheduled stance
-          contacts;
-    \item generating the resultant force required for linear body motion;
-    \item generating the resultant moment required for rotational body motion;
-    \item regularizing the magnitude of the optimized ground reaction forces;
-    \item discouraging contact forces outside the friction cone.
-\end{itemize}
-
-Absolute planar position and absolute yaw orientation are not active tasks
-because their weights are zero. Joint positions, joint velocities, actuator
-torques, and swing-foot tracking are also absent from the OCP. They cannot be
-optimized directly because they are not included in the SRBD state.\\
-\
-The velocity references and contact parameters are produced before solving the
-OCP. The commanded planar velocity is rotated into the world frame using the
-current heading:
-%
-\begin{equation}
-    \mathbf{v}_{xy}^{\mathrm{ref}}
-    =
-    \mathbf{R}_{z}(\psi)
-    \begin{bmatrix}
-        v_x^{\mathrm{cmd}} \\
-        v_y^{\mathrm{cmd}}
-    \end{bmatrix}.
-    \label{eq:lite3_world_velocity_reference}
-\end{equation}
-%
-This velocity is integrated over the horizon to obtain the planar position
-reference:
-%
-\begin{equation}
-    \mathbf{p}_{xy,k}^{\mathrm{ref}}
-    =
-    \mathbf{p}_{xy,0}
-    +
-    k\Delta t\,
-    \mathbf{v}_{xy}^{\mathrm{ref}}.
-    \label{eq:lite3_position_reference}
-\end{equation}
-%
-Although this reference is generated, it does not contribute directly to the
-current objective because the planar entries of $\mathbf{Q}_p$ are zero. The
-base height reference remains constant, and the reference orientation is
-upright when terrain estimation is disabled. The angular-velocity reference is
-%
-\begin{equation}
-    \boldsymbol{\omega}^{\mathrm{ref}}
-    =
-    \begin{bmatrix}
-        0 &
-        0 &
-        \omega_z^{\mathrm{cmd}}
-    \end{bmatrix}^{\top}.
-    \label{eq:lite3_angular_velocity_reference}
-\end{equation}
-%
-A separate gait generator specifies the contact schedule. Lite3 uses a trot in
-which the front-left and hind-right legs share the same phase, while the
-front-right and hind-left legs form the opposite pair. The foothold selected
-for each swing leg follows a velocity-based rule of the form
-%
-\begin{equation}
-    \mathbf{p}_{f,i,xy}^{\mathrm{target}}
-    =
-    \mathbf{p}_{f,i,xy}^{0}
-    +
-    \frac{D}{2f_{\mathrm{step}}}
-    \mathbf{v}_{xy}^{\mathrm{ref}}
-    +
-    \sqrt{\frac{h}{g}}
-    \left(
-        \mathbf{v}_{xy}
-        -
-        \mathbf{v}_{xy}^{\mathrm{ref}}
-    \right),
-    \label{eq:lite3_foothold_selection}
-\end{equation}
-%
-where $D$ is the duty factor, $f_{\mathrm{step}}$ is the step frequency, and
-$h$ is the desired base height. Smooth polynomial trajectories connect the
-lift-off location to the target foothold and raise the foot by the prescribed
-step height. Early measured contacts are used to stop the swing trajectory.\\
-\
-Foothold selection and swing-trajectory generation must not be described as
-tasks solved by the MPC. The generated contact locations enter the SRBD
-dynamics as moment arms, whereas the swing-foot position and velocity
-references are passed to the low-level controller. For a stance leg, this
-controller maps the first optimized ground reaction force into joint torques
-through the foot Jacobian. For a swing leg, it combines Cartesian feedback with
-a dynamics-based feedforward term to track the generated foot trajectory.
-Thus, contact scheduling determines where forces may act, the MPC computes
-their required values, and the low-level controller realizes the resulting
-stance and swing behavior.\\
-\
-For Lite3, the prediction horizon consists of 25 intervals of
-$0.02\,\mathrm{s}$, corresponding to $0.5\,\mathrm{s}$. The MPC is updated at
-$50\,\mathrm{Hz}$, while the low-level controller runs at $200\,\mathrm{Hz}$.
-The previous state and control trajectories are shifted and reused as the
-initial guess at the next MPC update.
-
-
 \subsection{Whole-Body Control}
 \label{subsubsec:wbc_dfcip}
+The WBC used for TITA turns the reduced-order MPC plan into joint torques by
+solving a quadratic program (QP) over the full robot model. Its decision vector
+contains generalized accelerations and the three-dimensional forces at the
+left and right wheel contacts,
+\[
+    x = \begin{bmatrix}
+        \ddot{q}^{\top} & f_L^{\top} & f_R^{\top}J
+    \end{bmatrix}^{\top}.
+\]
+The QP computes generalized accelerations and wheel contact forces while
+imposing the floating-base equations of motion as equality constraints. The
+actuator torques are then calculated from the optimized accelerations and
+contact forces using inverse dynamics.\\
+The desired WBC references are constructed from the first control input
+$U[0]$ of the optimized MPC sequence and the current robot state:
+CoM position, velocity, and acceleration; left and right wheel trajectories;
+and base yaw, angular velocity, and angular acceleration. These references
+form the feedforward and PD terms of the commanded task accelerations. Joint
+posture is referenced to the nominal configuration, with zero reference joint
+velocity and acceleration. The whole-body QP minimizes the following weighted
+quadratic cost, written in the same explicit term-by-term style as the
+DFCIP-MPC cost:
+\begin{equation}
+\begin{aligned}
+H_{\mathrm{WBC}}(x) ={}&
+    w_{\mathrm{com}}
+    \left\|J_{\mathrm{com}}\ddot{q}
+        +\dot{J}_{\mathrm{com}}\dot{q}
+        -a_{\mathrm{com}}^{\mathrm{cmd}}\right\|^2
+    \\
+    &+w_{\mathrm{lw}}
+    \left\|J_{\mathrm{lw}}\ddot{q}
+        +\dot{J}_{\mathrm{lw}}\dot{q}
+        -a_{\mathrm{lw}}^{\mathrm{cmd}}\right\|^2
+    +w_{\mathrm{rw}}
+    \left\|J_{\mathrm{rw}}\ddot{q}
+        +\dot{J}_{\mathrm{rw}}\dot{q}
+        -a_{\mathrm{rw}}^{\mathrm{cmd}}\right\|^2
+    \\
+    &+w_{\mathrm{base}}
+    \left\|J_{\mathrm{base}}^{\omega}\ddot{q}
+        +\dot{J}_{\mathrm{base}}^{\omega}\dot{q}
+        -\alpha_{\mathrm{base}}^{\mathrm{cmd}}\right\|^2
+    \\
+    &+w_{\mathrm{posture}}
+    \left\|S^{1/2}\left(\ddot{q}
+    -a_{\mathrm{posture}}^{\mathrm{cmd}}\right)\right\|^2
+    +w_{\ddot{q}}\|\ddot{q}\|^2
+    +\epsilon_f
+        \left(\|f_L\|^2+\|f_R\|^2\right).
+\end{aligned}
+\label{eq:tita_wbc_cost}
+\end{equation}
+Here, each commanded task acceleration contains feedforward acceleration and
+PD feedback. The complete set of objectives and hard conditions handled by the
+TITA whole-body QP is:
+\begin{itemize}
+    \item tracking CoM translational acceleration and wheels-centre translational acceleration, 
+    \item tracking base angular acceleration, 
+    \item regulating hip-abduction joint acceleration toward posture $q_0$,
+    \item regularizing generalized acceleration $\ddot{q}$;
+    \item regularizing contact forces $f_L$ and $f_R$;
+    \item enforcing floating-base Newton--Euler dynamics;
+    \item enforcing rolling kinematics at the left and right wheels;
+    \item constraining predicted joint velocities;
+    \item constraining predicted joint positions to their limits;
+    \item bounding wheel contact forces by friction pyramids;
+    \item enforcing positive normal force at both wheels.
+\end{itemize}
+The wheel tasks use their dedicated gains, the base task uses the motion
+gains, and posture regulation uses its own gains. Both wheel contacts are
+active in this formulation; the QP does not optimize a contact-activation
+schedule. Actuator torques are recovered after the solve, so torque bounds are
+not among its constraints.
+
+In compact form, the constrained QP is
+\[
+    \begin{aligned}
+        \min_x\quad & H_{\mathrm{WBC}}(x),\\
+        \text{subject to}\quad & A_{\mathrm{eq}}x=b_{\mathrm{eq}},\\
+        & d_{\min}\le Cx\le d_{\max}.
+    \end{aligned}
+\]
+Here, $A_{\mathrm{eq}}$ is the coefficient matrix for the equality constraints
+and $b_{\mathrm{eq}}$ is their right-hand-side vector. In the implementation,
+these are the variables named \texttt{A\_eq} and \texttt{b\_eq}: they stack
+three rolling-constraint equations for each wheel and six floating-base
+dynamics equations. Thus, the current QP has twelve scalar equality
+constraints. The matrix $C$ and bounds $d_{\min},d_{\max}$ collect the
+inequality constraints.
+
+The joint inequalities constrain the predicted state one WBC sample ahead.
+For each actuated joint $j$, the QP uses
+\[
+\begin{aligned}
+    \dot{q}_{j}^{+}
+        &= \dot{q}_{j}+\Delta t_{\mathrm{wbc}}\ddot{q}_{j},\\
+    q_{j}^{+}
+        &= q_{j}+\Delta t_{\mathrm{wbc}}\dot{q}_{j}
+           +\frac{\Delta t_{\mathrm{wbc}}^{2}}{2}\ddot{q}_{j},
+\end{aligned}
+\]
+and imposes the hard bounds
+\[
+    -\dot{q}_{j,\max}\leq \dot{q}_{j}^{+}\leq \dot{q}_{j,\max},
+    \qquad
+    q_{j,\min}\leq q_{j}^{+}\leq q_{j,\max}.
+\]
+The position limits are read from the joint ranges in the MuJoCo model. The
+implementation sets the velocity bound to $100\,\mathrm{rad/s}$ for every
+actuated joint. The inequality block also applies a friction-pyramid bound to
+each contact force in its local contact frame and enforces a positive lower
+bound on the normal force. The current QP does not include actuator-torque
+bounds.
+
+Once $\ddot{q}$ and $f_L,f_R$ have been found, the actuated part of inverse
+dynamics gives the torque command,
+\[
+    \tau = M_a\ddot{q}+c_a-J_{La}^{\top}T_Lf_L-J_{Ra}^{\top}T_Rf_R,
+\]
+where the subscript $a$ selects actuated coordinates and $T_L,T_R$ map contact
+forces into generalized forces, including their moment arms. The resulting
+torques form the actuator-level command that realizes the motion selected by
+the whole-body optimization.
 
 \section{Learning-Based Locomotion Control}
 
