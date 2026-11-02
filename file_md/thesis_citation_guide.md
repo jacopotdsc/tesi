@@ -63,6 +63,8 @@ below. Do not introduce author--year keys or alternative aliases.
   and navigation commands to a lower-level MPC.
 - `residual_mpc`: closest published reference to the thesis architecture; MPC
   and RL operate concurrently and their outputs are blended at torque level.
+- `hybrid_balance`: residual RL for wheeled-bipedal balance, with learned
+  torque corrections added to a model-based controller.
 
 ## GPU-accelerated optimal control
 

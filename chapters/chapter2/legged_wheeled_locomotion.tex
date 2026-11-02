@@ -1,0 +1,94 @@
+\section{Legged and Wheeled-Legged Locomotion}
+\label{sec:legged_wheeled_legged_locomotion}
+
+Legged robots move through the environment directly through force contacts
+exchange with the surrounding terrain. Unlike conventional wheeled
+vehicles, they do not require a continuous and approximately flat path. Each
+foot can be placed on a separate support surface, allowing the robot to cross
+steps, gaps, debris, and other irregular terrain. This mobility makes legged
+systems suitable for environments in which fixed infrastructure is unavailable
+or ordinary vehicles cannot operate \cite{legged_optimization}.\\
+\
+This capability introduces a demanding control problem. A legged robot is a
+floating-base mechanical system whose body is not directly actuated. Its motion
+must be generated indirectly through the forces exchanged at the active
+contacts. These contacts change during locomotion and are governed by
+unilateral and friction constraints: a foot can push against the terrain but
+cannot pull on it, while excessive tangential force may cause slipping. The
+controller must coordinate joint motion, contact timing, and ground reaction
+forces while maintaining balance and tracking the desired movement
+\cite{legged_optimization}.\\
+\
+The complexity of locomotion also depends on the selected gait. Periodic gaits,
+such as walking, trotting, and bounding, define recurring sequences of stance
+and swing phases. During stance, the contacting limbs support and accelerate
+the body. During swing, the remaining limbs are repositioned for the next
+contact. Faster motions reduce the time available for feedback and may include
+phases with a small support region or no ground contact. Aperiodic locomotion
+provides more freedom to react to the terrain, but selecting contact timings
+while planning the continuous motion makes the control problem considerably
+harder \cite{legged_optimization,non_gaited}.\\
+\
+Model uncertainty further separates the predicted and actual motion. Impacts,
+actuator limitations, delayed measurements, uncertain friction, and imperfect
+terrain information cannot always be represented accurately. These effects are
+particularly important when a controller relies on a reduced-order model, since
+the neglected articulated dynamics still influence the physical robot. Robust
+locomotion therefore requires continuous feedback and repeated adaptation of
+the planned motion.\\
+\
+Wheeled-legged robots extend this mobility by placing wheels at the ends of
+some or all limbs. On regular terrain, rolling avoids the repeated
+acceleration and deceleration associated with conventional stepping and can
+provide faster and more energy-efficient locomotion
+\cite{wheeled_legged_survey,keep_rollin}. When the terrain becomes
+discontinuous or unsuitable for rolling, the articulated legs can adjust the
+body posture, negotiate obstacles, or initiate a stepping motion
+\cite{rolling_deep}. The same platform can therefore use rolling for efficient
+traversal and leg motion when the geometry of the environment requires it.\\
+\
+The mechanical arrangement of the wheels determines the available mobility.
+Some platforms use steerable wheels, whereas others mount non-steerable wheels
+at the ends of the legs. In the latter case, each contact can move along the
+rolling direction but should not slide laterally. The controller must enforce
+this non-holonomic condition while coordinating wheel velocity, leg
+configuration, body motion, and contact forces
+\cite{keep_rollin,wheeled_whole_body_mpc}. The wheels increase the set of
+feasible motions, but also couple locomotion and posture control more tightly
+than in a purely legged system.\\
+\
+Wheeled-legged locomotion can be divided into rolling, stepping, and hybrid
+motions. During rolling, the wheels remain in contact with the ground and the
+legs regulate the posture of the body. During stepping, one or more wheel
+contacts are lifted and repositioned as ordinary feet. Hybrid locomotion
+combines these modes within the same manoeuvre, allowing the robot to drive
+across traversable regions and step over local obstacles
+\cite{rolling_deep}. The contact sequence may be prescribed in advance or
+adapted online according to the state of the robot and its kinematic limits
+\cite{wheeled_whole_body_mpc}.\\
+\
+The addition of wheels does not remove the difficulties associated with legged
+locomotion. Rolling contacts introduce further constraints, and transitions
+between driving and stepping modify the support configuration. At higher
+speeds, acceleration and cornering also redistribute the normal loads between
+the contacts. This lateral load transfer reduces the available contact margin
+and can increase the risk of wheel slip or rollover. On skid-steered platforms,
+yaw is generated through differential wheel torques, further coupling
+longitudinal motion, lateral dynamics, and body posture \cite{racing}.\\
+\
+Articulated legs can be used to mitigate these effects. By changing the
+relative extension of the legs on either side of the body, a wheeled-legged
+robot can regulate its roll angle and redistribute the contact loads. Physical
+experiments on the Unitree Go2-W demonstrated this principle by using the legs
+as an active suspension system and leaning the body into turns
+\cite{racing}. This extends the role of the legs beyond obstacle traversal:
+their configuration also affects stability and vehicle-like dynamics during
+fast rolling.\\
+\
+Legged and wheeled-legged robots thus share the need to regulate an
+underactuated floating body through constrained ground contacts. Wheels improve
+continuous mobility on suitable terrain, but introduce rolling constraints,
+additional actuation, and high-speed effects that are absent or less prominent
+in conventional stepping. These properties motivate controllers that can plan
+body motion and contact forces online while remaining sufficiently efficient
+for closed-loop operation.

@@ -1,0 +1,163 @@
+\section{Related Works}
+\label{sec:related_works}
+
+Optimization-based control has become a standard approach to dynamic legged
+locomotion. It formulates motion generation as an Optimal Control Problem in
+which the robot dynamics, contact forces, physical constraints, and task
+objectives are considered explicitly. Solving the complete problem online is
+difficult because legged robots have many degrees of freedom and interact with
+the environment through intermittent and unilateral contacts
+\cite{legged_optimization}. Existing controllers therefore differ in the
+dynamic model they employ, the way they represent contacts, and the division of
+tasks between predictive planning and low-level control.\\
+\
+Reduced-order models make online optimization tractable by retaining the
+variables that dominate balance and locomotion while neglecting part of the
+articulated dynamics. The convex MPC developed for the MIT Cheetah 3 represents
+the trunk as a single rigid body and optimizes the ground reaction forces over
+a finite horizon \cite{cheetah_mpc}. The whole-body nonlinear MPC of Neunert
+et al. instead includes the complete articulated dynamics and explicit contact
+dynamics, optimizing robot motion,
+contact locations, sequences, and timings within a single problem
+\cite{whole_body_nmpc}. This richer representation
+reduces the separation between planning and control but results in a more
+demanding optimization. Other work has addressed the numerical treatment of
+three-dimensional orientation \cite{representation_free_mpc} and adapted solver
+accuracy to the time constraints of whole-body locomotion control
+\cite{fast_whole_body_mpc}.\\
+\
+Wheeled-legged robots introduce rolling contacts and additional actuated
+degrees of freedom. Early experiments on ANYmal integrated wheel motion and
+non-holonomic rolling constraints into a whole-body planning and control
+framework \cite{keep_rollin}. Online trajectory optimization was later used to
+produce hybrid walking-driving motions on rough terrain
+\cite{rolling_deep}. A subsequent whole-body MPC formulation jointly optimize
+torso motion, wheel motion, and contact forces using a kinodynamic model that
+combines Single Rigid Body Dynamics with whole-body kinematics. Unlike the
+full-dynamics formulation discussed above, this model does not retain the
+complete articulated dynamics. A separate gait-sequence generator uses
+kinematic leg utilities to adapt contact timings online
+\cite{wheeled_whole_body_mpc}. These approaches coordinate wheel motion with
+leg configuration, body dynamics, and contact forces rather than treating the
+wheels as an independent drivetrain.\\
+\
+The wheeled-legged studies discussed above focus on terrain traversal and the
+transition between rolling and stepping. At higher speeds, vehicle-like
+effects become increasingly relevant. In particular, lateral load transfer
+during cornering can unload the inner wheels and bring the robot closer to
+rollover \cite{racing}. A recent controller for the Unitree
+Go2-W combined an MPC planner for active roll regulation with a learned
+low-level policy. The legs were used as an active suspension system to lean the
+body into turns and reduce lateral load transfer during physical racing
+experiments \cite{racing}.\\
+\
+Reinforcement Learning provides a different approach to the uncertainties and
+contact interactions involved in locomotion. Policies trained in simulation
+have been transferred to physical quadrupeds for agile movements and locomotion
+over challenging terrain \cite{agile_motor_skills,challenging_terrain}.
+Perceptive policies have also demonstrated locomotion in natural environments
+using proprioceptive and exteroceptive information
+\cite{perceptive_rl}. These methods can learn behaviours that are difficult to
+describe through an analytical model, but their performance depends on the
+training distribution, reward formulation, observation design, and simulation
+accuracy.\\
+\
+The computational structure of RL has encouraged massively parallel
+simulation. Thousands of robots can be simulated simultaneously on a GPU,
+producing large batches of experience for policy optimization. This approach
+has substantially reduced the time required to train locomotion policies and
+supports curriculum learning across many parallel environments
+\cite{parallel_rl}. A purely model-free policy, however, does not explicitly
+encode the physical constraints or the structure available to an
+optimization-based controller. This limitation has motivated methods that
+combine learning and model-based control.\\
+\
+Some hybrid architectures combine a model-based motion planner with an RL
+policy trained to execute the planned motion. In \cite{deep_tracking},
+trajectory optimization generates footholds and base motion and, during training,
+rewards encourage base-motion tracking and accurate foot placement, while the
+actor observes selected planning outputs rather than the full optimized base
+trajectory. The planner remains active during deployment.
+Lee et al. instead use Linear Inverted Pendulum dynamics
+to generate desired foot placements from velocity commands. Their RL policy
+tracks those placements without being required to follow the complete motion
+predicted by the reduced model \cite{footstep_rl}. In both cases, the model
+guides the learned behaviour, while the policy remains responsible for
+producing the low-level control action.\\
+\
+Hierarchical methods  can also assign high-level decisions to RL and motion generation
+to MPC, reversing the roles of the model-based and learned components in the
+preceding examples. In
+\cite{non_gaited}, a high-level RL policy selects acyclic contact patterns and
+navigation commands for a low-level MPC. This removes the combinatorial search
+over contact sequences from the continuous optimization and allows the same
+architecture to address legged and hybrid wheeled-legged locomotion.\\
+\
+Other approaches use learning to adapt the prediction model or individual
+components of the nominal control architecture. Learned corrections have been introduced
+to reduce the
+discrepancy between reduced-order predictions and the full-order dynamics of a
+quadruped \cite{model_gap}. Modular residual methods apply learned corrections
+to individual parts of a model-based controller, including its dynamics model
+and footstep planner \cite{modular_residual}. In the adaptive architecture
+presented in \cite{adaptive_mpc}, RL modifies the predictive dynamics, the
+swing-leg controller, and the gait frequency. These adaptations affect both
+the MPC problem and the generation of swing-leg commands, rather than adding
+a residual torque to the nominal actuator command.\\
+\
+Residual corrections can therefore act inside the model-based architecture,
+as in the model and planner adaptations discussed above. Action-level residual
+policy learning instead applies the correction to the nominal control output. A
+conventional
+controller supplies a nominal action, while RL learns only the correction
+needed to improve the resulting behaviour. This approach has been demonstrated
+in contact-rich manipulation tasks, where a feedback controller captured the
+known structure and a residual policy compensated for effects that were
+difficult to model \cite{residual_robot_control}. For locomotion, corrections
+to joint setpoints and corrections expressed directly as torques provide
+different ways of modifying the nominal actuator command
+\cite{residual_mpc}.\\
+\
+The work most closely related to this thesis is Residual MPC, which executes an
+MPC controller and a residual policy concurrently and combines their outputs at
+the torque-control level \cite{residual_mpc}. The MPC provides a structured
+control prior, while the policy learns corrections for modelling errors and
+behaviours that are difficult to encode in the optimization. The paper compares
+different residual action spaces and torque-blending strategies, showing that
+the action representation and the way the outputs are combined affect both
+learning and final locomotion behaviour \cite{residual_mpc}. Unlike approaches based on
+offline demonstrations, MPC
+remains active during training and deployment.\\
+\
+This integration creates a substantial computational requirement. An MPC
+problem must be solved for every simulated robot at each control update.
+Optimal-control solvers for legged locomotion have traditionally been designed
+for sequential execution on CPUs, whereas modern RL environments simulate
+thousands of agents in parallel on GPUs. The resulting separation between CPU
+optimization and GPU training limits the number of MPC instances that can be
+kept inside the learning loop \cite{residual_mpc,mpx}.\\
+\
+CusADi addressed this problem by translating symbolic expressions into
+GPU-compatible operations and evaluating large batches of approximate
+optimal-control problems in parallel \cite{cusadi}. ReLU-QP addresses the
+solution of quadratic programs by expressing ADMM iterations as a weight-tied
+network with ReLU activations, allowing execution through standard
+machine-learning tools on GPUs \cite{relu_qp}. MPX uses a primal-dual iLQR formulation
+implemented in JAX. Associative scans enable temporal and state-space
+parallelization, while batching supports many independent MPC instances on
+the same device \cite{mpx}. This enables MPC to remain directly inside a
+massively parallel RL training loop.\\
+\
+These studies motivate the combination of a model-based locomotion controller
+with learned corrections, but their models and control hierarchies cannot be
+transferred unchanged to TITA. The robot shares the rolling-contact constraints
+of wheeled quadrupeds, while its two-wheel support makes body balance and the
+coordination of wheel traction with leg motion central to the control problem.
+This thesis adopts the action-level residual approach: a DFCIP-based MPC and a
+constrained Whole-Body Controller generate the nominal command, while the
+policy modifies torque-level references to produce an additional torque
+contribution. The MPC and WBC remain active during training. Compared with the
+kinodynamic whole-body MPC used in Residual MPC \cite{residual_mpc}, the TITA
+architecture separates reduced-order prediction from whole-body torque
+computation. The architecture chapter describes this decomposition and how
+the learned correction is combined with the nominal command.
