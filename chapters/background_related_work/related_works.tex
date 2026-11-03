@@ -2,8 +2,8 @@
 \label{sec:related_works}
 
 Optimization-based control has become a standard approach to dynamic legged
-locomotion. It formulates motion generation as an Optimal Control Problem in
-which the robot dynamics, contact forces, physical constraints, and task
+locomotion. It formulates motion generation as an Optimal Control Problem
+(OCP) in which the robot dynamics, contact forces, physical constraints, and task
 objectives are considered explicitly. Solving the complete problem online is
 difficult because legged robots have many degrees of freedom and interact with
 the environment through intermittent and unilateral contacts
@@ -63,7 +63,8 @@ training distribution, reward formulation, observation design, and simulation
 accuracy.\\
 \
 The computational structure of RL has encouraged massively parallel
-simulation. Thousands of robots can be simulated simultaneously on a GPU,
+simulation. Thousands of robots can be simulated simultaneously on a
+GPU,
 producing large batches of experience for policy optimization. This approach
 has substantially reduced the time required to train locomotion policies and
 supports curriculum learning across many parallel environments
@@ -132,7 +133,8 @@ remains active during training and deployment.\\
 This integration creates a substantial computational requirement. An MPC
 problem must be solved for every simulated robot at each control update.
 Optimal-control solvers for legged locomotion have traditionally been designed
-for sequential execution on CPUs, whereas modern RL environments simulate
+for sequential execution on Central Processing Units
+(CPUs), whereas modern RL environments simulate
 thousands of agents in parallel on GPUs. The resulting separation between CPU
 optimization and GPU training limits the number of MPC instances that can be
 kept inside the learning loop \cite{residual_mpc,mpx}.\\
@@ -140,9 +142,11 @@ kept inside the learning loop \cite{residual_mpc,mpx}.\\
 CusADi addressed this problem by translating symbolic expressions into
 GPU-compatible operations and evaluating large batches of approximate
 optimal-control problems in parallel \cite{cusadi}. ReLU-QP addresses the
-solution of quadratic programs by expressing ADMM iterations as a weight-tied
+solution of quadratic programs by expressing Alternating Direction Method of
+Multipliers (ADMM) iterations as a weight-tied
 network with ReLU activations, allowing execution through standard
-machine-learning tools on GPUs \cite{relu_qp}. MPX uses a primal-dual iLQR formulation
+machine-learning tools on GPUs \cite{relu_qp}. MPX uses a primal-dual
+iterative Linear Quadratic Regulator (iLQR) formulation
 implemented in JAX. Associative scans enable temporal and state-space
 parallelization, while batching supports many independent MPC instances on
 the same device \cite{mpx}. This enables MPC to remain directly inside a

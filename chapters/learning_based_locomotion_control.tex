@@ -1,0 +1,15 @@
+\chapter{Learning-Based Locomotion Control}
+
+Model-based controllers predict robot motion through an explicit dynamics
+model, while learning-based methods acquire a policy through interaction with
+the environment. Reinforcement Learning (RL) is useful when contact effects
+and model errors are difficult to capture analytically, although learning an
+entire locomotion strategy from scratch can require lot of training time, 
+resources and reward design. The discussion first
+introduces the general RL formulation and then considers residual
+methods, which retain a nominal controller while learning how to improve it.\\
+\
+\input{chapters/learning_based_locomotion_control/end_to_end_rl}
+
+\newpage
+\input{chapters/learning_based_locomotion_control/residual_rl}

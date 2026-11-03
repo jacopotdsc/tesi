@@ -1,0 +1,19 @@
+\chapter{Model-Based Locomotion Control}
+\label{sec:model_based_control}
+
+Predicting the full floating-base dynamics over a long horizon can be expensive
+for real-time control. Model-based locomotion controllers therefore use two
+layers \cite{legged_optimization, cheetah_mpc}. An MPC plans the motion of the
+centre of mass and the contact forces on a reduced-order model. A Whole-Body
+Controller then turns this plan into joint torques, using the full dynamics and
+the actuator limits.\\
+\
+The TITA controller has the same structure.
+Section~\ref{subsec:dfcip_mpc} presents the DFCIP-based MPC, and
+Section~\ref{subsec:wbc_dfcip} presents the WBC.
+
+
+\input{chapters/model_based_locomotion_control/dfcip_mpc}
+
+\newpage
+\input{chapters/model_based_locomotion_control/whole_body_control}

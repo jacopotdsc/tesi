@@ -121,7 +121,8 @@ to control a single robot, their computational cost becomes a bottleneck when
 the controller must be evaluated across thousands of parallel simulation
 environments. This requirement is particularly relevant when MPC is included
 directly in a Reinforcement Learning training loop. Recent work has therefore
-focused on reformulating optimal-control algorithms to exploit GPU parallelism,
+focused on reformulating optimal-control algorithms to exploit Graphics Processing
+Unit (GPU) parallelism,
 allowing multiple MPC problems to be solved concurrently alongside the learning
 process. MPX follows this direction by providing a JAX-based, GPU-accelerated
 MPC framework for legged robots \cite{mpx}. Its solver exploits temporal and

@@ -39,7 +39,11 @@ Sul mio computer le repository sono:
 - Non modificare le repository del codice quando il compito riguarda
   soltanto la scrittura della tesi.
 - Il documento LaTeX deve poter essere compilato localmente da VS Code.
-- Quando compili, tutto deve stare nella cartelal di build
+- Quando compili, tutti i file generati devono stare nella cartella `build/`.
+- Dopo ogni modifica richiesta dall'utente e applicata dall'agente AI,
+  ricompila sempre la tesi e aggiorna `build/tedeschi_1882789_tita_rl.pdf`, così che le modifiche
+  siano subito visibili nel PDF. Verifica che la compilazione sia riuscita
+  prima di dichiarare concluso il lavoro; se fallisce, segnala l'errore.
 
 # How to write thesis
 Agisci come un copywriter umano esperto. Scrivi un testo sul seguente argomento applicando un'elevata perplessità (utilizza un vocabolario vario, espressioni idiomatiche e scelte di parole non scontate) e un'elevata burstiness (alterna frasi molto corte e incisive a frasi più lunghe e articolate). Evita transizioni robotiche come 'inoltre', 'in conclusione', 'è importante notare'. Usa un tono naturale, inserisci sfumature personali e scrivi come se stessi parlando a un amico o a un collega

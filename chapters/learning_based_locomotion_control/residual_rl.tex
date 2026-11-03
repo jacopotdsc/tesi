@@ -1,0 +1,90 @@
+\section{Residual Reinforcement Learning}
+
+Residual Reinforcement Learning augments a baseline controller with a learned
+policy that correct the output of the overall architecture. Given a state \(s_t\), the
+baseline action and the learned residual determine the action applied to the
+system:
+%
+\begin{equation}
+    a_t =
+    \pi_{\mathrm{base}}(s_t) + \pi_{\mathrm{residual}}(s_t),
+    \label{eq:residual_policy}
+\end{equation}
+%
+where \(\pi_{\mathrm{residual}}\) is the learned correction
+\cite{residual_policy,residual_robot_control}. If the residual is initialized
+to output zero, the robot initially behaves exactly like the baseline. The
+policy therefore never starts from nothing, it inherits a controller that
+already works, and only has to learn what that controller
+gets wrong \cite{residual_policy}. This is especially useful for statically unstable
+robots, where poor initial actions can quickly lead to a fall
+\cite{hybrid_balance}.\\
+\
+A residual policy can be connected to the controller at
+different levels: it can adjust the final actuator command
+\cite{residual_mpc,hybrid_balance}, modify an internal model-based module
+\cite{modular_residual,model_gap}, or provide high-level
+decisions \cite{non_gaited}. These choices
+assign different parts of the control task to learning and optimisation.\\
+\
+One way to combine learning with model-based control is to blend the policy
+output with the controller output. In \cite{residual_mpc} three interfaces
+for this correction are compared. In the first, the action \(a\) shifts
+the joint-position setpoint produced by the MPC,
+%
+\begin{equation}
+    \tau = K_p\left(q_{\mathrm{cmd}} + \lambda a - q\right)
+    + K_d\left(\dot{q}_{\mathrm{cmd}} - \dot{q}\right) + \tau_{\mathrm{cmd}}.
+    \label{eq:blend_joint_joint}
+\end{equation}
+%
+In the second, the action specifies a joint target relative to a default pose
+\(\hat{q}\). A PD law converts this target into a torque correction, which is
+then added to the MPC torque,
+%
+\begin{equation}
+    \tau_{\mathrm{res}} = K_p\left(a + \hat{q} - q\right) - K_d \dot{q},
+    \qquad
+    \tau = \tau_{\mathrm{MPC}} + \lambda \tau_{\mathrm{res}}.
+    \label{eq:blend_joint_torque}
+\end{equation}
+%
+In the third, the policy outputs a torque correction directly, which is added
+to the MPC torque:
+%
+\begin{equation}
+    \tau = \tau_{\mathrm{MPC}} + \lambda \tau_{\mathrm{RL}},
+    \qquad \tau_{\mathrm{RL}} = \pi_\theta(o_t).
+    \label{eq:blend_direct_torque}
+\end{equation}
+%
+Here the learned action is added after the nominal optimisation rather than
+being expressed as a reference for the lower-level controller. In
+\cite{hybrid_balance}, the policy uses the same blending rule as
+Eq.~\eqref{eq:blend_direct_torque}, adding its compensation torques to the
+outputs of the balance and pose controller.\\
+\
+In TITA, the policy runs at \(100\)~Hz and contributes a residual correction
+at the low-level control interface. The exact composition of the nominal and
+residual torque terms is described in Section~\ref{subsec:tita_training_environment}.\\
+\
+Other hybrid architectures place learned corrections inside predictive
+models or use a high-level policy to set motion commands and contact
+sequences \cite{model_gap,modular_residual,adaptive_mpc,non_gaited,
+deep_tracking}. In TITA, the nominal DFCIP-MPC handles the commanded motion
+and its unicycle model directly tracks CoM velocity and wheel speed. Unlike
+legged locomotion, where successive foot contacts can produce oscillations in
+CoM velocity, the wheels provide continuous rolling motion: once they reach
+their reference speed, the nominal controller can sustain the commanded
+velocity without changing the high-level reference or contact sequence. A
+high-level policy or modifications to the MPC modules are therefore not
+needed for basic velocity tracking task.\\
+\
+The TITA nominal model assumes flat ground and continuous contact so,
+if this assumptions is violated, the model may no longer accurately 
+predict the system's behavior, which particularly 
+matters for this platform in because the balance is inherently unstable.
+The residual policy is intended
+to improve robustness of locomotion through a low-level correction,
+leaving the nominal controller responsible for tracking the commanded
+motion.
