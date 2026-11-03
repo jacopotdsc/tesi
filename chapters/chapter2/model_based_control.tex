@@ -21,8 +21,22 @@ as a point mass supported by two ground reaction forces, one for each wheel.
 The motion of the wheeled support is represented by a virtual unicycle located
 at the midpoint between the wheel contacts.\\
 \
-The DFCIP state is
+Figure~\ref{fig:dfcip_model} shows how the model sits on top of the real robot.
+The red point is the CoM whose dynamics depend on the forces 
+which came from the wheel contacts.
 %
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{images/dfcip_model.png}
+    \caption{DFCIP template model overlaid on TITA. The CoM is a point mass
+    supported by the contact forces \(f_{c,l}\) and \(f_{c,r}\) (denoted
+    \(\mathbf{F}_L\) and \(\mathbf{F}_R\) in the text), applied at the wheel
+    contacts \(p_{c,l}\) and \(p_{c,r}\). The virtual unicycle at their
+    midpoint moves with forward speed \(v\) and yaw rate \(\omega\).}
+    \label{fig:dfcip_model}
+\end{figure}
+%
+\noindent The DFCIP state is
 \begin{equation}
     \mathbf{x}
     =

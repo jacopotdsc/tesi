@@ -1,0 +1,36 @@
+% Agent--environment loop, redrawn in colour after Sutton and Barto (2018), Fig. 3.1
+\begin{tikzpicture}[
+    >={Stealth[length=2.6mm]},
+    box/.style={draw, rounded corners=6pt, line width=0.9pt,
+                minimum width=3.0cm, minimum height=1.0cm, font=\Large\sffamily},
+    lbl/.style={font=\small\sffamily, align=center},
+]
+    \definecolor{agentc}{RGB}{52,101,164}
+    \definecolor{envc}{RGB}{78,154,6}
+    \definecolor{actc}{RGB}{206,92,0}
+    \definecolor{statec}{RGB}{32,74,135}
+    \definecolor{rewc}{RGB}{204,0,0}
+
+    \node[box, fill=agentc!15, draw=agentc!80!black] (A) at (0,2.2) {Agent};
+    \node[box, fill=envc!15,  draw=envc!70!black, minimum width=3.6cm] (E) at (0.7,0) {Environment};
+
+    % action
+    \draw[->, actc, line width=1.6pt]
+        (A.east) -- ++(2.6,0) |- (E.east)
+        node[pos=0.25, right, lbl, text=actc] {action\\ \(A_t\)};
+
+    % dashed step boundary
+    \draw[dashed, gray!70!black] (-2.5,-0.75) -- (-2.5,0.65);
+
+    % reward (inner loop)
+    \draw[->, rewc, line width=0.9pt]
+        ([yshift=0.18cm]E.west) -- (-3.0,0.18) -- (-3.0,2.38) -- ([yshift=0.18cm]A.west);
+    \node[lbl, text=rewc, anchor=west] at (-2.95,1.2) {reward\\ \(R_t\)};
+    \node[font=\scriptsize, text=rewc] at (-1.65,0.40) {\(R_{t+1}\)};
+
+    % state (outer loop)
+    \draw[->, statec, line width=1.6pt]
+        ([yshift=-0.18cm]E.west) -- (-3.7,-0.18) -- (-3.7,2.02) -- ([yshift=-0.18cm]A.west);
+    \node[lbl, text=statec, anchor=east] at (-3.75,1.2) {state\\ \(S_t\)};
+    \node[font=\scriptsize, text=statec] at (-1.65,-0.42) {\(S_{t+1}\)};
+\end{tikzpicture}
